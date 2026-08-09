@@ -28,21 +28,23 @@ EXAMPLE_QUESTIONS = [
 ]
 
 
-# --- The one seam that becomes the real agent later --------------------------
+# --- The seam: now backed by the real tool-use agent (on mock memory) --------
 def generate_response(user_message: str, history: list[dict]) -> str:
-    """Return the assistant's reply to `user_message`.
+    """Run the Atlas agent loop and return its answer.
 
-    RIGHT NOW: a mock so the UI is testable without Bedrock/DB.
-    LATER (Day 3-5): replace the body with the Bedrock Converse tool-use loop —
-    embed the question, let Claude call search_memory_index / fetch_decisions,
-    then return its answer. The signature stays the same, so nothing else changes.
+    The agent (agent.py) runs the search -> fetch -> answer loop over mock_memory.
+    On Day 4, agent.py's data source swaps to the real CockroachDB tools — this
+    function doesn't change at all.
     """
-    return (
-        f"You asked: **{user_message}**\n\n"
-        "This is where Atlas will search the memory index, fetch the relevant "
-        "revisions, and answer with real provenance once the agent is connected.\n\n"
-        "*(placeholder response — reasoning engine not wired up yet)*"
-    )
+    try:
+        import agent
+        return agent.answer(user_message, history)
+    except Exception as e:  # never let one bad call crash the whole chat
+        msg = str(e)
+        if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
+            return ("**Atlas is rate-limited right now** (free-tier quota). Wait a moment "
+                    "and try again, or switch `GEMINI_CHAT_MODEL` in `.env` to a higher-quota model.")
+        return f"**Something went wrong reaching the agent.**\n\n`{type(e).__name__}: {e}`"
 
 
 # --- Theme (drafting-sheet CSS on top of .streamlit/config.toml) -------------
@@ -199,7 +201,8 @@ if "messages" not in st.session_state:
 
 def send(user_message: str) -> None:
     st.session_state.messages.append({"role": "user", "content": user_message})
-    reply = generate_response(user_message, st.session_state.messages)
+    with st.spinner("Atlas is searching its memory…"):
+        reply = generate_response(user_message, st.session_state.messages)
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
 
@@ -241,7 +244,7 @@ with st.sidebar:
         '<div class="side-meta">Sheet 01 &middot; Rev C<br>2026-08-09</div>',
         unsafe_allow_html=True,
     )
-    st.markdown('<div class="side-status">UI shell — mock responses</div>', unsafe_allow_html=True)
+    st.markdown('<div class="side-status">Live agent — mock memory</div>', unsafe_allow_html=True)
     st.markdown('<hr class="side-rule">', unsafe_allow_html=True)
     if st.button("Reset conversation", use_container_width=True):
         st.session_state.messages = [{"role": "assistant", "content": WELCOME}]
