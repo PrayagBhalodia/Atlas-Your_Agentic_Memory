@@ -1,0 +1,125 @@
+[
+  {
+    "topic": "mobile offline sync",
+    "sequence_num": 1,
+    "old_state": null,
+    "new_state": "Planned for Q2 roadmap",
+    "cause": "Offline access was the top-requested feature from mobile users",
+    "trigger_event": "Ranked #1 in the Q1 customer survey",
+    "tension": null,
+    "recorded_by": "Product Agent",
+    "tag": "mobile offline sync planned for Q2"
+  },
+  {
+    "topic": "mobile offline sync",
+    "sequence_num": 2,
+    "old_state": "Planned for Q2 roadmap",
+    "new_state": "Deprioritized to Q3",
+    "cause": "Enterprise SSO work was needed to close the Acme deal and consumed the sprint",
+    "trigger_event": "Acme contract made SSO a signing condition",
+    "tension": "Consumer offline UX vs. enterprise revenue",
+    "recorded_by": "Strategy Agent",
+    "tag": "mobile offline sync deprioritized for SSO bandwidth"
+  },
+  {
+    "topic": "mobile offline sync",
+    "sequence_num": 3,
+    "old_state": "Deprioritized to Q3",
+    "new_state": "Pushed to Q4, on hold",
+    "cause": "SSO delivery overran and the mobile team was reassigned to it",
+    "trigger_event": "SSO milestone slipped two sprints",
+    "tension": "Mobile roadmap commitments vs. enterprise delivery",
+    "recorded_by": "Product Agent",
+    "tag": "mobile offline sync pushed to Q4 after SSO overran"
+  },
+  {
+    "topic": "mobile offline sync",
+    "sequence_num": 4,
+    "old_state": "Pushed to Q4, on hold",
+    "new_state": "Shelved indefinitely pending demand signal",
+    "cause": "Usage analytics showed offline demand was concentrated in a single small segment",
+    "trigger_event": "Q3 analytics review",
+    "tension": "Engineering cost vs. actual measured usage",
+    "recorded_by": "Strategy Agent",
+    "tag": "mobile offline sync shelved after low usage signal"
+  },
+
+  {
+    "topic": "engineering headcount",
+    "sequence_num": 1,
+    "old_state": null,
+    "new_state": "Hiring frozen, current team sufficient",
+    "cause": "Runway concerns after a soft Q4 for sales",
+    "trigger_event": "Q4 revenue came in 20% under plan",
+    "tension": "Growth speed vs. runway preservation",
+    "recorded_by": "Finance Agent",
+    "tag": "engineering hiring frozen to protect runway"
+  },
+  {
+    "topic": "engineering headcount",
+    "sequence_num": 2,
+    "old_state": "Hiring frozen, current team sufficient",
+    "new_state": "One senior backend hire approved",
+    "cause": "SSO and infra backlog were blocking enterprise deals worth more than the salary",
+    "trigger_event": "Two enterprise deals stalled on integration work",
+    "tension": "Added burn rate vs. revenue unlocked",
+    "recorded_by": "Strategy Agent",
+    "tag": "one senior backend hire approved to unblock enterprise"
+  },
+  {
+    "topic": "engineering headcount",
+    "sequence_num": 3,
+    "old_state": "One senior backend hire approved",
+    "new_state": "Hire paused, contractor extended instead",
+    "cause": "Runway dropped to 11 months after the bridge round slipped",
+    "trigger_event": "Bridge financing pushed to the following quarter",
+    "tension": "Permanent headcount burn vs. flexible contractor capacity",
+    "recorded_by": "Finance Agent",
+    "tag": "backend hire paused, contractor extended on runway risk"
+  },
+  {
+    "topic": "engineering headcount",
+    "sequence_num": 4,
+    "old_state": "Hire paused, contractor extended instead",
+    "new_state": "Senior hire reopened",
+    "cause": "Bridge round closed and returned runway to a comfortable 16 months",
+    "trigger_event": "$2M bridge round closed",
+    "tension": null,
+    "recorded_by": "Strategy Agent",
+    "tag": "senior backend hire reopened after bridge round closed"
+  },
+
+  {
+    "topic": "pricing model",
+    "sequence_num": 1,
+    "old_state": null,
+    "new_state": "Flat $99 per seat per month",
+    "cause": "Simplicity to drive early self-serve adoption",
+    "trigger_event": "Initial go-to-market launch",
+    "tension": "Simplicity vs. capturing value from heavy users",
+    "recorded_by": "Strategy Agent",
+    "tag": "launched flat per-seat pricing"
+  },
+  {
+    "topic": "pricing model",
+    "sequence_num": 2,
+    "old_state": "Flat $99 per seat per month",
+    "new_state": "Added a usage-based tier for API calls",
+    "cause": "The heaviest API accounts were underpaying relative to the infra cost they drove",
+    "trigger_event": "Top 5 accounts drove 60% of infrastructure cost",
+    "tension": "Predictable revenue vs. fair cost recovery",
+    "recorded_by": "Finance Agent",
+    "tag": "added usage-based API pricing tier"
+  },
+  {
+    "topic": "pricing model",
+    "sequence_num": 3,
+    "old_state": "Added a usage-based tier for API calls",
+    "new_state": "Introduced annual enterprise contracts bundled with SSO",
+    "cause": "Enterprise buyers wanted predictable annual billing and SSO in one package",
+    "trigger_event": "Acme and two other prospects requested annual enterprise terms",
+    "tension": "Self-serve simplicity vs. enterprise contract complexity",
+    "recorded_by": "Strategy Agent",
+    "tag": "introduced annual enterprise pricing with SSO"
+  }
+]
