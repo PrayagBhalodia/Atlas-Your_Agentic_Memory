@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas — The co-founder that remembers why</title>
+<meta name="description" content="Atlas gives startups time-aware organizational memory: every belief, every reversal, every because — on an append-only record.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:   #EAEFF2;
+    --vellum:  #F7F9FB;
+    --ink:     #16324A;
+    --process: #2F6D9B;
+    --faded:   #5E7385;
+    --redline: #B0342B;
+    --grid:    rgba(22, 50, 74, 0.055);
+    --grid-major: rgba(22, 50, 74, 0.09);
+    --line:    rgba(22, 50, 74, 0.22);
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--process); color: var(--vellum); }
+
+  a { color: var(--process); }
+  :focus-visible {
+    outline: 3px solid var(--process);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .skip {
+    position: absolute; left: -999px; top: 8px; z-index: 99;
+    background: var(--ink); color: var(--vellum);
+    padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+    text-decoration: none;
+  }
+  .skip:focus-visible { left: 16px; }
+
+  /* ---- The sheet: whole page framed like an engineering drawing ---- */
+  .sheet {
+    margin: clamp(8px, 2vw, 24px);
+    border: 2px solid var(--ink);
+    background-image:
+      linear-gradient(var(--grid-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+    min-height: calc(100vh - 48px);
+  }
+
+  .mono {
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.08em;
+  }
+
+  /* ---- Masthead ---- */
+  .masthead {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px clamp(16px, 4vw, 40px);
+    background: var(--paper);
+    border-bottom: 2px solid var(--ink);
+  }
+  .brand {
+    font-family: 'Archivo', sans-serif; font-weight: 800;
+    font-size: 20px; letter-spacing: 0.18em; text-decoration: none; color: var(--ink);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .brand::before {
+    content: ""; width: 10px; height: 10px; background: var(--ink); display: inline-block;
+  }
+  .masthead nav { display: flex; align-items: center; gap: clamp(10px, 2vw, 28px); }
+  .masthead nav a {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink); text-decoration: none;
+    border-bottom: 2px solid transparent; padding-bottom: 2px;
+  }
+  .masthead nav a:hover { border-bottom-color: var(--redline); }
+  .sheet-meta {
+    font-size: 11.5px; color: var(--faded); text-transform: uppercase;
+  }
+
+  main { padding: 0 clamp(16px, 4vw, 40px); max-width: 1060px; margin: 0 auto; }
+
+  /* ---- Hero ---- */
+  .hero { padding: clamp(56px, 10vh, 120px) 0 clamp(40px, 7vh, 80px); }
+  .kicker {
+    font-size: 12.5px; font-weight: 500; color: var(--process);
+    text-transform: uppercase; letter-spacing: 0.22em; margin-bottom: 22px;
+  }
+  h1 {
+    font-family: 'Archivo', sans-serif; font-weight: 800;
+    font-size: clamp(2.3rem, 5.6vw, 4rem);
+    line-height: 1.08; letter-spacing: -0.015em;
+    max-width: 18ch;
+  }
+  h1 s {
+    text-decoration: line-through;
+    text-decoration-color: var(--redline);
+    text-decoration-thickness: 3px;
+    color: var(--faded);
+  }
+  h1 .fix {
+    color: var(--process);
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 6px;
+  }
+  .lede {
+    margin-top: 26px; max-width: 58ch; font-size: 18.5px; color: var(--ink);
+  }
+  .lede strong { font-weight: 600; }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+  .btn {
+    display: inline-block; text-decoration: none; border-radius: 2px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 13px 22px; border: 2px solid var(--ink);
+  }
+  .btn-primary { background: var(--ink); color: var(--vellum); }
+  .btn-primary:hover { background: var(--process); border-color: var(--process); }
+  .btn-ghost { color: var(--ink); background: transparent; }
+  .btn-ghost:hover { border-color: var(--process); color: var(--process); }
+  .specline {
+    margin-top: 40px; font-size: 12px; color: var(--faded);
+    text-transform: uppercase; letter-spacing: 0.16em;
+  }
+
+  /* ---- Section scaffolding ---- */
+  .band { padding: clamp(48px, 9vh, 104px) 0; border-top: 1.5px solid var(--line); }
+  .secnum {
+    display: block; font-size: 12px; color: var(--redline); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 14px;
+  }
+  h2 {
+    font-family: 'Archivo', sans-serif; font-weight: 700;
+    font-size: clamp(1.55rem, 3.4vw, 2.35rem); line-height: 1.15;
+    letter-spacing: -0.01em; max-width: 24ch;
+  }
+  .section-intro { margin-top: 16px; max-width: 60ch; color: var(--faded); font-size: 16.5px; }
+
+  /* ---- The Decision Register (signature) ---- */
+  .register-card {
+    margin-top: 40px; background: var(--vellum);
+    border: 2px solid var(--ink); border-radius: 3px;
+    box-shadow: 6px 6px 0 rgba(22, 50, 74, 0.08);
+  }
+  .topic-row {
+    display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between;
+    padding: 12px 22px; border-bottom: 2px solid var(--ink);
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--faded);
+  }
+  .topic-row b { color: var(--ink); font-weight: 600; }
+
+  .register { position: relative; padding: 8px 22px 8px 46px; }
+  .register::before {
+    content: ""; position: absolute; left: 24px; top: 26px; bottom: 26px;
+    width: 2px; background: var(--ink);
+  }
+  .rev { position: relative; padding: 20px 0; }
+  .rev + .rev { border-top: 1.5px dashed var(--line); }
+  .rev::before {
+    content: ""; position: absolute; left: -28px; top: 27px;
+    width: 10px; height: 10px; background: var(--vellum);
+    border: 2px solid var(--ink);
+  }
+  .rev.current::before { background: var(--process); border-color: var(--process); }
+
+  .rev-head {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px;
+  }
+  .rev-id {
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px;
+    letter-spacing: 0.1em; color: var(--ink);
+  }
+  .rev-head time {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--faded);
+    letter-spacing: 0.06em;
+  }
+  .stamp {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    border: 1.5px solid var(--redline); color: var(--redline);
+    padding: 2px 9px; border-radius: 2px;
+  }
+  .stamp-current {
+    border-color: var(--process); background: var(--process); color: var(--vellum);
+    transform: rotate(-1.5deg);
+  }
+
+  .belief { font-size: 17.5px; font-weight: 500; max-width: 56ch; }
+  .rev.superseded .belief {
+    color: #51677A;
+    text-decoration: line-through;
+    text-decoration-color: var(--redline);
+    text-decoration-thickness: 2px;
+  }
+
+  .prov { margin-top: 12px; display: grid; gap: 6px; }
+  .prov > div { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: baseline; }
+  .prov dt {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.14em; color: var(--faded); text-transform: uppercase;
+  }
+  .prov dd { font-size: 14.5px; color: var(--ink); }
+
+  .loop-strip {
+    border-top: 2px solid var(--ink);
+    padding: 12px 22px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--process);
+  }
+  .register-note { margin-top: 22px; max-width: 62ch; font-size: 15.5px; color: var(--faded); }
+  .register-note em { color: var(--ink); font-style: normal; font-weight: 600; }
+
+  /* ---- Agents ---- */
+  .agents-grid {
+    margin-top: 40px; display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+  .agent {
+    background: var(--vellum); border: 2px solid var(--ink); border-radius: 3px;
+    padding: 22px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .agent-code {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; font-weight: 600;
+    letter-spacing: 0.16em; color: var(--redline); text-transform: uppercase;
+  }
+  .agent h3 { font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 21px; }
+  .agent .epigram { font-size: 15px; color: var(--faded); font-style: italic; }
+  .agent ul { list-style: none; padding: 0; display: grid; gap: 6px; }
+  .agent li {
+    font-size: 14.5px; padding-left: 18px; position: relative;
+  }
+  .agent li::before {
+    content: ""; position: absolute; left: 0; top: 9px;
+    width: 8px; height: 2px; background: var(--process);
+  }
+  .agent-foot {
+    margin-top: auto; padding-top: 14px; border-top: 1.5px dashed var(--line);
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--faded);
+  }
+
+  .bus { margin-top: 34px; }
+  .bus-ticks {
+    height: 26px;
+    background:
+      linear-gradient(var(--ink), var(--ink)) 16.66% 0 / 2px 100% no-repeat,
+      linear-gradient(var(--ink), var(--ink)) 50% 0 / 2px 100% no-repeat,
+      linear-gradient(var(--ink), var(--ink)) 83.33% 0 / 2px 100% no-repeat;
+  }
+  .bus-bar {
+    border: 2px solid var(--ink); background: var(--ink); color: var(--vellum);
+    padding: 12px 20px; text-align: center; border-radius: 2px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+
+  /* ---- Title block footer ---- */
+  .titleblock {
+    margin: clamp(48px, 9vh, 104px) clamp(16px, 4vw, 40px) 0;
+    border: 2px solid var(--ink); border-bottom: none;
+    max-width: 1060px; margin-left: auto; margin-right: auto;
+    background: var(--vellum);
+  }
+  .tb-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .tb-cell { padding: 14px 18px; border: 1px solid var(--line); }
+  .tb-cell dt {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--faded);
+  }
+  .tb-cell dd { margin: 4px 0 0; font-size: 14px; font-weight: 500; }
+  .tb-closer {
+    padding: 12px 18px; border-top: 2px solid var(--ink);
+    display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--faded);
+  }
+  .tb-closer .no-erase { color: var(--redline); font-weight: 600; }
+
+  /* ---- Reveal (motion-safe only) ---- */
+  @media (prefers-reduced-motion: no-preference) {
+    .js .reveal { opacity: 0; translate: 0 14px; transition: opacity .55s ease, translate .55s ease; }
+    .js .reveal.in { opacity: 1; translate: 0 0; }
+  }
+
+  @media (max-width: 720px) {
+    .sheet-meta { display: none; }
+    .prov > div { grid-template-columns: 1fr; gap: 2px; }
+    .bus-ticks { display: none; }
+    .register { padding-left: 40px; }
+    .register::before { left: 20px; }
+    .rev::before { left: -26px; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="sheet">
+  <header class="masthead">
+    <a class="brand" href="#">ATLAS</a>
+    <nav aria-label="Page sections">
+      <a href="#register">Register</a>
+      <a href="#agents">Agents</a>
+    </nav>
+    <span class="mono sheet-meta">Sheet 01 · Rev C · 2026-08-09</span>
+  </header>
+
+  <main id="main">
+
+    <!-- HERO -->
+    <section class="hero">
+      <p class="mono kicker">Time-aware organizational memory</p>
+      <h1>Atlas remembers what your startup <s>said</s> <span class="fix">believed</span> — when, and why it changed.</h1>
+      <p class="lede">
+        Slack threads scroll away. Docs go stale. People leave — and the reasoning leaves
+        with them. Atlas is an AI co-founder that keeps every belief your company has held
+        on an <strong>append-only record</strong>: what changed, what caused it, and what it
+        traded off against. Ask <em>why</em>, and the answer is on the record.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#register">Inspect the register</a>
+        <a class="btn btn-ghost" href="#agents">Meet the agents</a>
+      </div>
+      <p class="mono specline">Append-only ledger · Vector-indexed recall · Agents write back</p>
+    </section>
+
+    <!-- DECISION REGISTER -->
+    <section class="band" id="register">
+      <div class="reveal">
+        <span class="mono secnum">02 · Decision register</span>
+        <h2>Beliefs get revised. The record never does.</h2>
+        <p class="section-intro">
+          Most memory systems overwrite yesterday's answer with today's. Atlas records a new
+          revision instead — struck through, dated, and linked to what replaced it — so the
+          history of your thinking stays queryable, not reconstructed.
+        </p>
+      </div>
+
+      <div class="register-card reveal">
+        <div class="topic-row">
+          <span>Topic: <b>Mobile offline sync</b></span>
+          <span>Entries: 3</span>
+          <span>Opened 2026-01-12</span>
+        </div>
+
+        <div class="register">
+          <article class="rev superseded">
+            <div class="rev-head">
+              <span class="rev-id">REV A</span>
+              <time datetime="2026-01-12">2026-01-12</time>
+              <span class="stamp">Superseded → Rev B</span>
+            </div>
+            <p class="belief">Build full offline sync for the mobile app this quarter.</p>
+            <dl class="prov">
+              <div><dt>Cause</dt><dd>Early users on flaky connections asked for it repeatedly.</dd></div>
+              <div><dt>Trigger</dt><dd>Q1 user interviews.</dd></div>
+            </dl>
+          </article>
+
+          <article class="rev superseded">
+            <div class="rev-head">
+              <span class="rev-id">REV B</span>
+              <time datetime="2026-02-15">2026-02-15</time>
+              <span class="stamp">Superseded → Rev C</span>
+            </div>
+            <p class="belief">Deprioritize offline sync; ship a read-only cache instead.</p>
+            <dl class="prov">
+              <div><dt>Cause</dt><dd>Two enterprise deals blocked on SSO — worth more than the churn risk.</dd></div>
+              <div><dt>Tension</dt><dd>Traded power-user delight for near-term revenue.</dd></div>
+            </dl>
+          </article>
+
+          <article class="rev current">
+            <div class="rev-head">
+              <span class="rev-id">REV C</span>
+              <time datetime="2026-07-02">2026-07-02</time>
+              <span class="stamp stamp-current">Current</span>
+            </div>
+            <p class="belief">Revisit full offline sync in H2, once SSO ships.</p>
+            <dl class="prov">
+              <div><dt>Cause</dt><dd>SSO delivered; the two mobile engineers free up in July.</dd></div>
+              <div><dt>Tension</dt><dd>H2 roadmap already crowded with the billing revamp.</dd></div>
+            </dl>
+          </article>
+        </div>
+
+        <div class="loop-strip" aria-label="How a query flows through Atlas">
+          Query → Search index → Fetch revisions → Answer → Record new rev
+        </div>
+      </div>
+
+      <p class="register-note reveal">
+        Ask Atlas <em>"why did we deprioritize offline sync?"</em> and the Strategy Agent walks
+        this exact chain — states, causes, tensions — then records that the question was asked.
+        <em>The inquiry itself becomes part of the history.</em>
+      </p>
+    </section>
+
+    <!-- AGENTS -->
+    <section class="band" id="agents">
+      <div class="reveal">
+        <span class="mono secnum">03 · The agents</span>
+        <h2>Three specialists. One shared memory.</h2>
+        <p class="section-intro">
+          No private context, no siloed notes. Finance, Product, and Strategy read from — and
+          write back to — the same register.
+        </p>
+      </div>
+
+      <div class="agents-grid reveal">
+        <article class="agent">
+          <span class="agent-code">Detail FIN-01</span>
+          <h3>Finance Agent</h3>
+          <p class="epigram">Knows what the runway can bear.</p>
+          <ul>
+            <li>Runway &amp; burn rate</li>
+            <li>Hiring cost models</li>
+            <li>Cash scenarios</li>
+          </ul>
+          <span class="agent-foot">Reads ⇄ writes · shared register</span>
+        </article>
+
+        <article class="agent">
+          <span class="agent-code">Detail PRD-02</span>
+          <h3>Product Agent</h3>
+          <p class="epigram">Knows what the roadmap can absorb.</p>
+          <ul>
+            <li>Roadmap state</li>
+            <li>Engineering load</li>
+            <li>Feature backlog</li>
+          </ul>
+          <span class="agent-foot">Reads ⇄ writes · shared register</span>
+        </article>
+
+        <article class="agent">
+          <span class="agent-code">Detail STR-03</span>
+          <h3>Strategy Agent</h3>
+          <p class="epigram">Owns the why.</p>
+          <ul>
+            <li>Synthesizes Finance + Product</li>
+            <li>Traces decision provenance</li>
+            <li>Writes conclusions back as new revisions</li>
+          </ul>
+          <span class="agent-foot">Reads ⇄ writes · shared register</span>
+        </article>
+      </div>
+
+      <div class="bus reveal" role="img" aria-label="All three agents connect to one shared memory register">
+        <div class="bus-ticks"></div>
+        <div class="bus-bar">One shared register — every conclusion becomes the next revision</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- TITLE BLOCK -->
+  <footer>
+    <div class="titleblock">
+      <dl class="tb-grid">
+        <div class="tb-cell"><dt>Title</dt><dd>Atlas — Time-aware organizational memory</dd></div>
+        <div class="tb-cell"><dt>Project</dt><dd>Agentic Memory · CockroachDB × AWS</dd></div>
+        <div class="tb-cell"><dt>Drawn by</dt><dd>FIN-01 · PRD-02 · STR-03</dd></div>
+        <div class="tb-cell"><dt>Checked by</dt><dd>Strategy Agent</dd></div>
+        <div class="tb-cell"><dt>Date</dt><dd>2026-08-09</dd></div>
+        <div class="tb-cell"><dt>Sheet</dt><dd>01 of 01 · Rev C</dd></div>
+      </dl>
+      <div class="tb-closer">
+        <span>Built on CockroachDB · Amazon Bedrock · Streamlit</span>
+        <span class="no-erase">No revision is ever erased</span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+  document.documentElement.classList.replace('no-js', 'js');
+  (function () {
+    if (!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  })();
+</script>
+</body>
+</html>
