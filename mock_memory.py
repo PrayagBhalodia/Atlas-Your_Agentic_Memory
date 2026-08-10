@@ -101,9 +101,16 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
-# Embed every index entry ONCE at import (topic + tag captures its meaning).
-# In the real system this is precomputed and stored in CockroachDB's vector column.
-_INDEX_VECTORS = _embed([f"{e['topic']} — {e['tag']}" for e in INDEX])
+# Index embeddings are computed lazily on the first search (so simply reading DECISIONS
+# — e.g. for the Timeline page — doesn't spend an embedding call). Cached after first use.
+_index_vectors = None
+
+
+def _get_index_vectors() -> list[list[float]]:
+    global _index_vectors
+    if _index_vectors is None:
+        _index_vectors = _embed([f"{e['topic']} — {e['tag']}" for e in INDEX])
+    return _index_vectors
 
 
 # --- The two retrieval tools (contract signatures) ----------------------------
@@ -112,7 +119,7 @@ def search_memory_index(query_text: str, threshold: float = DEFAULT_THRESHOLD, m
     similarity, return the ones scoring >= threshold (not a fixed top-k)."""
     query_vec = _embed([query_text])[0]
     matches = []
-    for entry, vec in zip(INDEX, _INDEX_VECTORS):
+    for entry, vec in zip(INDEX, _get_index_vectors()):
         score = _cosine(query_vec, vec)
         if score >= threshold:
             matches.append({
