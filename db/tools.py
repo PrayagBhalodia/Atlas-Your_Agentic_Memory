@@ -182,14 +182,15 @@ def _insert_decision(topic: str, old_state, new_state: str, cause, trigger_event
 
 
 def record_decision(topic: str, old_state, new_state: str, cause, trigger_event,
-                    tension, recorded_by: str) -> dict:
+                    tension, recorded_by: str, created_at: str | None = None) -> dict:
     """Insert a new decision + its index row (the agent's write-back). Returns {id}.
 
     The §4 signature carries no explicit tag, so we derive a short one for the index.
-    Day 5 can upgrade this to an LLM-generated tag; a topic+new_state label embeds fine.
+    `created_at` (optional 'YYYY-MM-DD') lets ingestion stamp the real decision date read
+    from a document; omitted for live write-backs, where the DB default now() fires.
     """
     tag = f"{topic}: {new_state}"
     if len(tag) > 120:
         tag = tag[:117] + "..."
     return _insert_decision(topic, old_state, new_state, cause, trigger_event,
-                            tension, recorded_by, tag)
+                            tension, recorded_by, tag, created_at=created_at)

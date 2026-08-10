@@ -299,6 +299,30 @@ def inject_theme() -> None:
         .about-card h3 { font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 1.1rem;
             margin: 4px 0 0; color: var(--ink); }
         .about-card p { margin: 6px 0 0; font-size: 0.96rem; color: var(--ink); }
+        .about-card ul { margin: 8px 0 0; padding-left: 18px; }
+        .about-card li { font-size: 0.92rem; margin: 3px 0; }
+
+        /* Timeline topic dropdowns (st.expander) ---------------------------- */
+        [data-testid="stExpander"] {
+            border: 2px solid var(--ink); border-radius: 3px; background: var(--vellum);
+            margin-bottom: 0.9rem; box-shadow: 4px 4px 0 rgba(22, 50, 74, 0.07);
+        }
+        /* Style ONLY the label paragraph — never the toggle icon (it's an icon font) */
+        [data-testid="stExpander"] summary p {
+            font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 0.78rem;
+            letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); margin: 0;
+        }
+        [data-testid="stExpander"] summary:hover p { color: var(--process); }
+        /* Belt-and-suspenders: don't let text-transform/spacing leak onto the icon
+           (leave its font-family alone — that's the Material Symbols icon font) */
+        [data-testid="stExpanderToggleIcon"], [data-testid="stExpanderToggleIcon"] * {
+            text-transform: none !important; letter-spacing: normal !important;
+        }
+
+        /* File uploader (Ingest page) --------------------------------------- */
+        [data-testid="stFileUploaderDropzone"] {
+            background: var(--vellum); border: 2px dashed var(--line); border-radius: 3px;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -329,7 +353,7 @@ def render_navbar(active: str) -> None:
         f"""
         <nav class="atlas-nav">
             <a class="nav-brand" href="?view=chat" target="_self"><span class="brand-tile"><span class="brand-glyph"><i></i><i></i><i></i></span></span><span class="brand-stack"><span class="brand-word"><span class="bw-ink">AT</span><span class="bw-accent">LAS</span></span><span class="brand-tag">Time-aware memory</span></span></a>
-            <div class="nav-links">{link('chat', 'Chat')}{link('timeline', 'Timeline')}{link('about', 'About')}</div>
+            <div class="nav-links">{link('chat', 'Chat')}{link('timeline', 'Timeline')}{link('ingest', 'Ingest')}{link('about', 'About')}</div>
             <div class="nav-meta">Sheet 01 &middot; Rev C</div>
         </nav>
         """,
@@ -407,9 +431,8 @@ def render_timeline() -> None:
     def prov_row(label: str, value) -> str:
         return f"<div><dt>{label}</dt><dd>{value}</dd></div>" if value else ""
 
-    blocks = []
-    for topic, revs in topics.items():
-        rows = [f'<div class="reg-topic"><div class="reg-topic-head">Topic: <b>{topic}</b> &middot; {len(revs)} revisions</div><div class="reg-body">']
+    def topic_html(revs: list) -> str:
+        rows = ['<div class="reg-body">']
         for i, d in enumerate(revs):
             current = i == len(revs) - 1
             letter = chr(ord("A") + i)
@@ -427,9 +450,14 @@ def render_timeline() -> None:
                 f'<dl class="prov">{prov_row("Cause", d["cause"])}{prov_row("Trigger", d["trigger_event"])}{prov_row("Tension", d["tension"])}</dl>'
                 f'</article>'
             )
-        rows.append("</div></div>")
-        blocks.append("".join(rows))
-    st.markdown("".join(blocks), unsafe_allow_html=True)
+        rows.append("</div>")
+        return "".join(rows)
+
+    # Each topic is a collapsible dropdown; its label shows the current state at a glance.
+    for topic, revs in topics.items():
+        current_state = revs[-1]["new_state"]
+        with st.expander(f"{topic}  —  {len(revs)} revisions  ·  now: {current_state}", expanded=False):
+            st.markdown(topic_html(revs), unsafe_allow_html=True)
 
 
 def render_about() -> None:
@@ -452,6 +480,57 @@ def render_about() -> None:
     )
 
 
+def render_ingest() -> None:
+    st.markdown(
+        """
+        <div class="atlas-header">
+            <div class="atlas-kicker">Ingest</div>
+            <h1 class="page-title">Add documents to memory</h1>
+            <div class="page-sub">Upload a document or a full meeting discussion (PDF, Word, Markdown,
+            PowerPoint). Atlas distills it into one compact record per decision or change, then appends
+            each to memory on its own — where it appears in the Timeline.</div>
+            <hr class="atlas-rule">
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    files = st.file_uploader(
+        "Drop files here",
+        type=["pdf", "docx", "md", "txt", "pptx"],
+        accept_multiple_files=True,
+    )
+
+    if files and st.button("Extract key points and append to memory", use_container_width=True):
+        import ingest
+        total = 0
+        for f in files:
+            with st.spinner(f"Reading {f.name}…"):
+                try:
+                    recorded = ingest.ingest_file(f.name, f.getvalue())
+                except (Exception, SystemExit) as e:
+                    st.markdown(
+                        f'<div class="about-card"><p><b>{f.name} — could not process.</b><br>{e}</p></div>',
+                        unsafe_allow_html=True,
+                    )
+                    continue
+            if not recorded:
+                st.markdown(
+                    f'<div class="about-card"><p><b>{f.name}:</b> no decisions found to record.</p></div>',
+                    unsafe_allow_html=True,
+                )
+                continue
+            total += len(recorded)
+            items = "".join(f'<li><b>{r["topic"]}</b>: {r["new_state"]}</li>' for r in recorded)
+            st.markdown(
+                f'<div class="about-card"><span class="about-verb">Appended {len(recorded)}</span>'
+                f'<h3>{f.name}</h3><ul>{items}</ul></div>',
+                unsafe_allow_html=True,
+            )
+        if total:
+            st.success(f"Appended {total} decision(s) to memory. Open the Timeline to see them.")
+
+
 def render_sidebar(active: str) -> None:
     with st.sidebar:
         st.markdown('<div class="side-brand">ATLAS</div>', unsafe_allow_html=True)
@@ -467,7 +546,7 @@ def render_sidebar(active: str) -> None:
 inject_theme()
 
 view = st.query_params.get("view", "chat")
-if view not in ("chat", "timeline", "about"):
+if view not in ("chat", "timeline", "ingest", "about"):
     view = "chat"
 
 render_navbar(view)
@@ -475,6 +554,8 @@ render_sidebar(view)
 
 if view == "timeline":
     render_timeline()
+elif view == "ingest":
+    render_ingest()
 elif view == "about":
     render_about()
 else:
