@@ -97,6 +97,37 @@ def fetch_decisions(id_list: list[str]) -> list[dict]:
     return out
 
 
+def list_decisions() -> list[dict]:
+    """All decisions, grouped-ready (ordered by topic, then oldest-first within a topic).
+    Used to render the full provenance timeline, including agent write-backs.
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, topic, old_state, new_state, cause, trigger_event,
+                       tension, recorded_by, created_at
+                FROM decisions
+                ORDER BY topic, created_at;
+                """
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    return [{
+        "id": str(r["id"]),
+        "topic": r["topic"],
+        "old_state": r["old_state"],
+        "new_state": r["new_state"],
+        "cause": r["cause"],
+        "trigger_event": r["trigger_event"],
+        "tension": r["tension"],
+        "recorded_by": r["recorded_by"],
+        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+    } for r in rows]
+
+
 def _insert_decision(topic: str, old_state, new_state: str, cause, trigger_event,
                      tension, recorded_by: str, tag: str,
                      sequence_num: int | None = None) -> dict:

@@ -32,18 +32,20 @@ EXAMPLE_QUESTIONS = [
 def generate_response(user_message: str, history: list[dict]) -> str:
     """Run the Atlas agent loop and return its answer.
 
-    The agent (agent.py) runs the search -> fetch -> answer loop over mock_memory.
-    On Day 4, agent.py's data source swaps to the real CockroachDB tools — this
-    function doesn't change at all.
+    The agent (agent.py) runs the search -> fetch -> (record) -> answer loop over
+    Track A's real CockroachDB tools.
     """
     try:
         import agent
         return agent.answer(user_message, history)
-    except Exception as e:  # never let one bad call crash the whole chat
+    except (Exception, SystemExit) as e:  # never let one bad call crash the whole chat
         msg = str(e)
         if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
             return ("**Atlas is rate-limited right now** (free-tier quota). Wait a moment "
                     "and try again, or switch `GEMINI_CHAT_MODEL` in `.env` to a higher-quota model.")
+        if "COCKROACH_DATABASE_URL" in msg:
+            return ("**Atlas can't reach its memory database.** Add `COCKROACH_DATABASE_URL` to "
+                    "your `.env` — ask your teammate for the CockroachDB connection string.")
         return f"**Something went wrong reaching the agent.**\n\n`{type(e).__name__}: {e}`"
 
 
@@ -363,8 +365,9 @@ def render_chat() -> None:
 
 
 def render_timeline() -> None:
+    import os
+    import sys
     from collections import OrderedDict
-    import mock_memory
 
     st.markdown(
         """
@@ -378,8 +381,27 @@ def render_timeline() -> None:
         unsafe_allow_html=True,
     )
 
+    # Load live decisions from CockroachDB (Track A's data layer), incl. agent write-backs.
+    db_dir = os.path.join(os.path.dirname(__file__), "db")
+    if db_dir not in sys.path:
+        sys.path.insert(0, db_dir)
+    try:
+        import tools as memory
+        decisions = memory.list_decisions()
+    except (Exception, SystemExit) as e:
+        hint = ("Add <code>COCKROACH_DATABASE_URL</code> to your <code>.env</code> — ask your "
+                "teammate for the connection string.") if "COCKROACH_DATABASE_URL" in str(e) else str(e)
+        st.markdown(f'<div class="about-card"><p><b>Can\'t load the timeline.</b> {hint}</p></div>',
+                    unsafe_allow_html=True)
+        return
+
+    if not decisions:
+        st.markdown('<div class="about-card"><p>No decisions recorded yet.</p></div>',
+                    unsafe_allow_html=True)
+        return
+
     topics: "OrderedDict[str, list]" = OrderedDict()
-    for d in sorted(mock_memory.DECISIONS, key=lambda x: x["created_at"]):
+    for d in decisions:  # already ordered by topic, then created_at (oldest first)
         topics.setdefault(d["topic"], []).append(d)
 
     def prov_row(label: str, value) -> str:
@@ -399,7 +421,7 @@ def render_timeline() -> None:
             rows.append(
                 f'<article class="rev {state}">'
                 f'<div class="rev-head"><span class="rev-id">Rev {letter}</span>'
-                f'<time>{d["created_at"][:10]}</time>{stamp}'
+                f'<time>{(d["created_at"] or "")[:10]}</time>{stamp}'
                 f'<span class="recorded">— {d["recorded_by"]}</span></div>'
                 f'<p class="belief">{d["new_state"]}</p>'
                 f'<dl class="prov">{prov_row("Cause", d["cause"])}{prov_row("Trigger", d["trigger_event"])}{prov_row("Tension", d["tension"])}</dl>'
