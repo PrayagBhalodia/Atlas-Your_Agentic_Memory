@@ -16,7 +16,7 @@ from embeddings import embed_tag, embed_query, to_pgvector
 
 
 def search_memory_index(query_text: str,
-                        threshold: float = 0.7,
+                        threshold: float = 0.65,
                         max_results: int = 10) -> list[dict]:
     """Embed query_text, HNSW cosine search over memory_index.tag_embedding.
     Returns only rows scoring >= threshold (score = cosine similarity, 0..1).
@@ -130,10 +130,14 @@ def list_decisions() -> list[dict]:
 
 def _insert_decision(topic: str, old_state, new_state: str, cause, trigger_event,
                      tension, recorded_by: str, tag: str,
-                     sequence_num: int | None = None) -> dict:
+                     sequence_num: int | None = None,
+                     created_at: str | None = None) -> dict:
     """Dual-write: embed the tag, then INSERT the decisions row AND its memory_index
     row in ONE transaction (the app-level atomic write decided on Day 2). Shared by the
     seed loader (explicit tag/seq) and record_decision (derived tag, auto seq).
+
+    created_at lets the seed loader stamp historical dates so the provenance timeline
+    shows a real spread; when omitted (live write-backs) the DB default now() fires.
     """
     embedding = to_pgvector(embed_tag(tag))
     conn = get_conn()
@@ -150,11 +154,13 @@ def _insert_decision(topic: str, old_state, new_state: str, cause, trigger_event
             cur.execute(
                 """
                 INSERT INTO decisions
-                    (topic, old_state, new_state, cause, trigger_event, tension, recorded_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (topic, old_state, new_state, cause, trigger_event, tension,
+                     recorded_by, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamptz, now()))
                 RETURNING id;
                 """,
-                (topic, old_state, new_state, cause, trigger_event, tension, recorded_by),
+                (topic, old_state, new_state, cause, trigger_event, tension,
+                 recorded_by, created_at),
             )
             decision_id = cur.fetchone()["id"]
 

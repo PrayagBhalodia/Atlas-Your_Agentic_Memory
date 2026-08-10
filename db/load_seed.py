@@ -39,6 +39,7 @@ def main() -> None:
             recorded_by=rec["recorded_by"],
             tag=rec["tag"],
             sequence_num=rec.get("sequence_num"),
+            created_at=rec.get("created_at"),
         )
         print(f"  [{i:2}/{len(records)}] {rec['topic']:22} #{rec.get('sequence_num')} "
               f"-> {res['id'][:8]}  ({rec['tag']})")

@@ -8,7 +8,8 @@
     "trigger_event": "Ranked #1 in the Q1 customer survey",
     "tension": null,
     "recorded_by": "Product Agent",
-    "tag": "mobile offline sync planned for Q2"
+    "tag": "mobile offline sync planned for Q2",
+    "created_at": "2026-01-15T00:00:00Z"
   },
   {
     "topic": "mobile offline sync",
@@ -19,7 +20,8 @@
     "trigger_event": "Acme contract made SSO a signing condition",
     "tension": "Consumer offline UX vs. enterprise revenue",
     "recorded_by": "Strategy Agent",
-    "tag": "mobile offline sync deprioritized for SSO bandwidth"
+    "tag": "mobile offline sync deprioritized for SSO bandwidth",
+    "created_at": "2026-03-04T00:00:00Z"
   },
   {
     "topic": "mobile offline sync",
@@ -30,7 +32,8 @@
     "trigger_event": "SSO milestone slipped two sprints",
     "tension": "Mobile roadmap commitments vs. enterprise delivery",
     "recorded_by": "Product Agent",
-    "tag": "mobile offline sync pushed to Q4 after SSO overran"
+    "tag": "mobile offline sync pushed to Q4 after SSO overran",
+    "created_at": "2026-05-20T00:00:00Z"
   },
   {
     "topic": "mobile offline sync",
@@ -41,7 +44,8 @@
     "trigger_event": "Q3 analytics review",
     "tension": "Engineering cost vs. actual measured usage",
     "recorded_by": "Strategy Agent",
-    "tag": "mobile offline sync shelved after low usage signal"
+    "tag": "mobile offline sync shelved after low usage signal",
+    "created_at": "2026-07-28T00:00:00Z"
   },
 
   {
@@ -53,7 +57,8 @@
     "trigger_event": "Q4 revenue came in 20% under plan",
     "tension": "Growth speed vs. runway preservation",
     "recorded_by": "Finance Agent",
-    "tag": "engineering hiring frozen to protect runway"
+    "tag": "engineering hiring frozen to protect runway",
+    "created_at": "2026-01-22T00:00:00Z"
   },
   {
     "topic": "engineering headcount",
@@ -64,7 +69,8 @@
     "trigger_event": "Two enterprise deals stalled on integration work",
     "tension": "Added burn rate vs. revenue unlocked",
     "recorded_by": "Strategy Agent",
-    "tag": "one senior backend hire approved to unblock enterprise"
+    "tag": "one senior backend hire approved to unblock enterprise",
+    "created_at": "2026-03-12T00:00:00Z"
   },
   {
     "topic": "engineering headcount",
@@ -75,7 +81,8 @@
     "trigger_event": "Bridge financing pushed to the following quarter",
     "tension": "Permanent headcount burn vs. flexible contractor capacity",
     "recorded_by": "Finance Agent",
-    "tag": "backend hire paused, contractor extended on runway risk"
+    "tag": "backend hire paused, contractor extended on runway risk",
+    "created_at": "2026-05-08T00:00:00Z"
   },
   {
     "topic": "engineering headcount",
@@ -86,7 +93,8 @@
     "trigger_event": "$2M bridge round closed",
     "tension": null,
     "recorded_by": "Strategy Agent",
-    "tag": "senior backend hire reopened after bridge round closed"
+    "tag": "senior backend hire reopened after bridge round closed",
+    "created_at": "2026-07-15T00:00:00Z"
   },
 
   {
@@ -98,7 +106,8 @@
     "trigger_event": "Initial go-to-market launch",
     "tension": "Simplicity vs. capturing value from heavy users",
     "recorded_by": "Strategy Agent",
-    "tag": "launched flat per-seat pricing"
+    "tag": "launched flat per-seat pricing",
+    "created_at": "2026-02-01T00:00:00Z"
   },
   {
     "topic": "pricing model",
@@ -109,7 +118,8 @@
     "trigger_event": "Top 5 accounts drove 60% of infrastructure cost",
     "tension": "Predictable revenue vs. fair cost recovery",
     "recorded_by": "Finance Agent",
-    "tag": "added usage-based API pricing tier"
+    "tag": "added usage-based API pricing tier",
+    "created_at": "2026-04-15T00:00:00Z"
   },
   {
     "topic": "pricing model",
@@ -120,6 +130,7 @@
     "trigger_event": "Acme and two other prospects requested annual enterprise terms",
     "tension": "Self-serve simplicity vs. enterprise contract complexity",
     "recorded_by": "Strategy Agent",
-    "tag": "introduced annual enterprise pricing with SSO"
+    "tag": "introduced annual enterprise pricing with SSO",
+    "created_at": "2026-06-10T00:00:00Z"
   }
 ]
