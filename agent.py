@@ -107,8 +107,9 @@ _STRATEGY_TOOLS = dict(_SPECIALIST_TOOLS, record_decision=_record_decision)
 _STRATEGY_DECLS = [_SEARCH_DECL, _FETCH_DECL, _RECORD_DECL]
 
 
-def _run(system: str, tool_map: dict, declarations: list, prompt: str) -> str:
-    """Generic Gemini tool-use loop: run until the model answers in text."""
+def _run(system, tool_map, declarations, prompt, on_event=None, agent="") -> str:
+    """Generic Gemini tool-use loop: run until the model answers in text.
+    on_event(dict), if given, receives tool_call / tool_result events for the thinking trace."""
     config = types.GenerateContentConfig(
         system_instruction=system,
         tools=[types.Tool(function_declarations=declarations)],
@@ -122,7 +123,12 @@ def _run(system: str, tool_map: dict, declarations: list, prompt: str) -> str:
         conversation.append(response.candidates[0].content)
         result_parts = []
         for call in response.function_calls:
-            result = tool_map[call.name](**dict(call.args))
+            args = dict(call.args)
+            if on_event:
+                on_event({"type": "tool_call", "agent": agent, "tool": call.name, "input": args})
+            result = tool_map[call.name](**args)
+            if on_event:
+                on_event({"type": "tool_result", "agent": agent, "tool": call.name, "result": result})
             result_parts.append(types.Part.from_function_response(name=call.name, response={"result": result}))
         conversation.append(types.Content(role="user", parts=result_parts))
     conversation.append(types.Content(role="user", parts=[types.Part(
@@ -133,15 +139,32 @@ def _run(system: str, tool_map: dict, declarations: list, prompt: str) -> str:
     return final.text.strip()
 
 
-def answer(question: str, history: list[dict] | None = None) -> str:
+def answer(question: str, history=None, on_event=None) -> str:
     """Run all three agents: Finance and Product each give their domain view, then Strategy
-    synthesizes them with the decision history (and records new decisions)."""
-    finance_view = _run(_FINANCE_SYSTEM, _SPECIALIST_TOOLS, _SPECIALIST_DECLS, question)
-    product_view = _run(_PRODUCT_SYSTEM, _SPECIALIST_TOOLS, _SPECIALIST_DECLS, question)
+    synthesizes them with the decision history (and records new decisions).
+
+    on_event(dict), if given, receives a live trace: agent_start / tool_call / tool_result /
+    agent_view events — for the UI's "thinking" display.
+    """
+    def emit(ev):
+        if on_event:
+            on_event(ev)
+
+    emit({"type": "agent_start", "agent": "Finance"})
+    finance_view = _run(_FINANCE_SYSTEM, _SPECIALIST_TOOLS, _SPECIALIST_DECLS, question, on_event, "Finance")
+    emit({"type": "agent_view", "agent": "Finance", "text": finance_view})
+
+    emit({"type": "agent_start", "agent": "Product"})
+    product_view = _run(_PRODUCT_SYSTEM, _SPECIALIST_TOOLS, _SPECIALIST_DECLS, question, on_event, "Product")
+    emit({"type": "agent_view", "agent": "Product", "text": product_view})
+
+    emit({"type": "agent_start", "agent": "Strategy"})
     strategy_prompt = (
         f"Question: {question}\n\n"
         f"Finance Agent's view:\n{finance_view}\n\n"
         f"Product Agent's view:\n{product_view}\n\n"
         "Now produce the final answer."
     )
-    return _run(_STRATEGY_SYSTEM, _STRATEGY_TOOLS, _STRATEGY_DECLS, strategy_prompt)
+    final = _run(_STRATEGY_SYSTEM, _STRATEGY_TOOLS, _STRATEGY_DECLS, strategy_prompt, on_event, "Strategy")
+    emit({"type": "agent_view", "agent": "Strategy", "text": final})
+    return final

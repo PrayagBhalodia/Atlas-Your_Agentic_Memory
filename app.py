@@ -22,22 +22,16 @@ WELCOME = (
     "Ask me about a decision and I'll trace how the thinking got there."
 )
 
-EXAMPLE_QUESTIONS = [
-    "How has our pricing strategy changed over time?",
-    "Where should we focus engineering next?",
-]
-
-
 # --- The seam: now backed by the real tool-use agent (on mock memory) --------
-def generate_response(user_message: str, history: list[dict]) -> str:
-    """Run the Atlas agent loop and return its answer.
+def generate_response(user_message, history, on_event=None) -> str:
+    """Run the three-agent loop and return its answer.
 
-    The agent (agent.py) runs the search -> fetch -> (record) -> answer loop over
-    Track A's real CockroachDB tools.
+    agent.py runs Finance + Product + Strategy over Track A's CockroachDB tools; `on_event`
+    streams the thinking trace (which agent, what it searched, which records it used).
     """
     try:
         import agent
-        return agent.answer(user_message, history)
+        return agent.answer(user_message, history, on_event=on_event)
     except (Exception, SystemExit) as e:  # never let one bad call crash the whole chat
         msg = str(e)
         if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
@@ -47,6 +41,39 @@ def generate_response(user_message: str, history: list[dict]) -> str:
             return ("**Atlas can't reach its memory database.** Add `COCKROACH_DATABASE_URL` to "
                     "your `.env` — ask your teammate for the CockroachDB connection string.")
         return f"**Something went wrong reaching the agent.**\n\n`{type(e).__name__}: {e}`"
+
+
+# --- Thinking-trace formatting -----------------------------------------------
+def _event_md(ev: dict) -> str:
+    """Render one agent trace event as a themed HTML line (or '' to skip). No vector scores;
+    kept concise and readable — the search phrase, the records actually used, the agent's view."""
+    kind, agent = ev.get("type"), ev.get("agent", "")
+
+    if kind == "agent_start":
+        return f'<div class="think-agent">{agent} Agent</div>'
+
+    if kind == "tool_call":
+        tool, inp = ev["tool"], ev.get("input", {})
+        if tool == "search_memory_index":
+            return f'<div class="think-step">Searched memory for “{inp.get("query_text", "")}”</div>'
+        if tool == "record_decision":
+            return f'<div class="think-step">Recorded a new decision: <span class="ref">{inp.get("topic", "")}</span></div>'
+        return ""  # fetch call is covered by its result line
+
+    if kind == "tool_result":
+        tool, res = ev["tool"], ev.get("result") or []
+        if tool == "search_memory_index" and not res:
+            return '<div class="think-step">Found no relevant records</div>'
+        if tool == "fetch_decisions" and res:
+            topics = list(dict.fromkeys(r["topic"] for r in res))
+            names = ", ".join(f'<span class="ref">{t}</span>' for t in topics)
+            return f'<div class="think-step">Read {len(res)} record(s) on {names}</div>'
+        return ""  # non-empty search result and record result add no readable value
+
+    if kind == "agent_view" and agent in ("Finance", "Product"):
+        return f'<div class="think-view">{ev.get("text", "")}</div>'
+
+    return ""
 
 
 # --- Theme (drafting-sheet CSS on top of .streamlit/config.toml) -------------
@@ -305,6 +332,16 @@ def inject_theme() -> None:
             color: var(--faded); margin-top: 10px; word-break: break-all; }
         .ingest-src code { font-size: 0.66rem; background: none; color: var(--process); }
 
+        /* Agent "thinking" trace ------------------------------------------- */
+        .think-agent { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; font-weight: 600;
+            letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink);
+            margin: 14px 0 5px; display: flex; align-items: center; gap: 8px; }
+        .think-agent::before { content: ""; width: 7px; height: 7px; background: var(--process); flex: none; }
+        .think-step { font-size: 0.85rem; color: var(--faded); margin: 3px 0 3px 16px; line-height: 1.5; }
+        .think-step .ref { color: var(--process); font-weight: 500; }
+        .think-view { font-size: 0.88rem; color: var(--ink); margin: 6px 0 4px 16px;
+            padding-left: 11px; border-left: 2px solid var(--line); line-height: 1.55; }
+
         /* Timeline topic dropdowns (st.expander) ---------------------------- */
         [data-testid="stExpander"] {
             border: 2px solid var(--ink); border-radius: 3px; background: var(--vellum);
@@ -339,9 +376,16 @@ if "messages" not in st.session_state:
 
 def send(user_message: str) -> None:
     st.session_state.messages.append({"role": "user", "content": user_message})
-    with st.spinner("Atlas is consulting its agents…"):
-        reply = generate_response(user_message, st.session_state.messages)
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+    trace = []
+    with st.status("Atlas is consulting its agents…", expanded=True) as status:
+        def on_event(ev):
+            trace.append(ev)
+            md = _event_md(ev)
+            if md:
+                st.markdown(md, unsafe_allow_html=True)
+        reply = generate_response(user_message, st.session_state.messages, on_event)
+        status.update(label="Atlas answered", state="complete", expanded=False)
+    st.session_state.messages.append({"role": "assistant", "content": reply, "trace": trace})
 
 
 # --- Page routing ------------------------------------------------------------
@@ -379,13 +423,13 @@ def render_chat() -> None:
     )
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
+            if msg.get("trace"):
+                with st.expander("Agent reasoning"):
+                    for ev in msg["trace"]:
+                        md = _event_md(ev)
+                        if md:
+                            st.markdown(md, unsafe_allow_html=True)
             st.markdown(msg["content"])
-    if len(st.session_state.messages) == 1:
-        cols = st.columns(len(EXAMPLE_QUESTIONS))
-        for col, q in zip(cols, EXAMPLE_QUESTIONS):
-            if col.button(q, use_container_width=True):
-                send(q)
-                st.rerun()
     if prompt := st.chat_input("Ask about the company's decision history"):
         send(prompt)
         st.rerun()
@@ -414,7 +458,8 @@ def render_timeline() -> None:
         sys.path.insert(0, db_dir)
     try:
         import tools as memory
-        decisions = memory.list_decisions()
+        with st.spinner("Loading the decision timeline…"):
+            decisions = memory.list_decisions()
     except (Exception, SystemExit) as e:
         hint = ("Add <code>COCKROACH_DATABASE_URL</code> to your <code>.env</code> — ask your "
                 "teammate for the connection string.") if "COCKROACH_DATABASE_URL" in str(e) else str(e)
@@ -514,12 +559,13 @@ def render_ingest() -> None:
             source_line = ""
             if storage.is_configured():
                 try:
-                    uri = storage.upload_document(f.name, data)
+                    with st.spinner(f"Staging {f.name} in S3…"):
+                        uri = storage.upload_document(f.name, data)
                     source_line = f'<div class="ingest-src">Staged in S3: <code>{uri}</code></div>'
                 except Exception as e:
                     source_line = f'<div class="ingest-src">S3 staging skipped: {e}</div>'
             # 2) distill + append to memory
-            with st.spinner(f"Reading {f.name}…"):
+            with st.spinner(f"Distilling {f.name} and saving decisions…"):
                 try:
                     recorded = ingest.ingest_file(f.name, data)
                 except (Exception, SystemExit) as e:
