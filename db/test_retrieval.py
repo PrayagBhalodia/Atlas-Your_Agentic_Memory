@@ -12,8 +12,8 @@ THRESHOLD = 0.6  # deliberately below the 0.7 default — Gemini scores run comp
 MAX_RESULTS = 5
 
 QUERIES = [
-    "why did we stop working on mobile offline mode?",   # -> offline sync chain (Q2 style)
-    "should we hire another engineer?",                   # -> headcount chain (Q1 style)
+    "why did we stop working on mobile offline mode?",   # -> offline sync chain
+    "how has our engineering hiring stance evolved?",     # -> headcount chain
     "how has our pricing changed over time?",             # -> pricing chain
     "what's the weather like today?",                     # unrelated -> expect no hits
 ]

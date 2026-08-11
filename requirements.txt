@@ -1,5 +1,22 @@
-# ATLAS — Track A (data layer) dependencies.
-# Install into a fresh venv:  python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
-psycopg2-binary==2.9.12   # CockroachDB / Postgres driver
-python-dotenv==1.2.2      # load .env (COCKROACH_DATABASE_URL, GEMINI_API_KEY)
-google-genai==2.17.0      # Gemini embeddings (stand-in for Bedrock Titan while AWS verifies)
+# ATLAS — full project dependencies.
+# Fresh setup:  python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+
+# App + UI
+streamlit==1.61.1
+
+# LLM (chat, multi-agent, distiller) + embeddings — all via Gemini
+google-genai==2.17.0
+
+# CockroachDB / Postgres driver
+psycopg2-binary==2.9.12
+
+# Config (.env: COCKROACH_DATABASE_URL, GEMINI_API_KEY, AWS_*, S3_BUCKET)
+python-dotenv==1.2.2
+
+# AWS SDK — S3 document staging (and the Bedrock check in hello.py)
+boto3==1.43.67
+
+# Document-ingestion parsers (PDF / Word / PowerPoint; Markdown & txt need none)
+pypdf
+python-docx
+python-pptx

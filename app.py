@@ -23,8 +23,8 @@ WELCOME = (
 )
 
 EXAMPLE_QUESTIONS = [
-    "Should we hire another engineer?",
-    "Why did we deprioritize mobile offline sync?",
+    "How has our pricing strategy changed over time?",
+    "Where should we focus engineering next?",
 ]
 
 
@@ -339,7 +339,7 @@ if "messages" not in st.session_state:
 
 def send(user_message: str) -> None:
     st.session_state.messages.append({"role": "user", "content": user_message})
-    with st.spinner("Atlas is searching its memory…"):
+    with st.spinner("Atlas is consulting its agents…"):
         reply = generate_response(user_message, st.session_state.messages)
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
