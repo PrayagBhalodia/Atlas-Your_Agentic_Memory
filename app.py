@@ -301,6 +301,9 @@ def inject_theme() -> None:
         .about-card p { margin: 6px 0 0; font-size: 0.96rem; color: var(--ink); }
         .about-card ul { margin: 8px 0 0; padding-left: 18px; }
         .about-card li { font-size: 0.92rem; margin: 3px 0; }
+        .ingest-src { font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem;
+            color: var(--faded); margin-top: 10px; word-break: break-all; }
+        .ingest-src code { font-size: 0.66rem; background: none; color: var(--process); }
 
         /* Timeline topic dropdowns (st.expander) ---------------------------- */
         [data-testid="stExpander"] {
@@ -487,8 +490,8 @@ def render_ingest() -> None:
             <div class="atlas-kicker">Ingest</div>
             <h1 class="page-title">Add documents to memory</h1>
             <div class="page-sub">Upload a document or a full meeting discussion (PDF, Word, Markdown,
-            PowerPoint). Atlas distills it into one compact record per decision or change, then appends
-            each to memory on its own — where it appears in the Timeline.</div>
+            PowerPoint). The original is stored in Amazon S3, then Atlas distills it into one compact
+            record per decision or change and appends each to memory — where it appears in the Timeline.</div>
             <hr class="atlas-rule">
         </div>
         """,
@@ -503,20 +506,31 @@ def render_ingest() -> None:
 
     if files and st.button("Extract key points and append to memory", use_container_width=True):
         import ingest
+        import storage
         total = 0
         for f in files:
+            data = f.getvalue()
+            # 1) stage the original document in S3 (keeps the source; provenance)
+            source_line = ""
+            if storage.is_configured():
+                try:
+                    uri = storage.upload_document(f.name, data)
+                    source_line = f'<div class="ingest-src">Staged in S3: <code>{uri}</code></div>'
+                except Exception as e:
+                    source_line = f'<div class="ingest-src">S3 staging skipped: {e}</div>'
+            # 2) distill + append to memory
             with st.spinner(f"Reading {f.name}…"):
                 try:
-                    recorded = ingest.ingest_file(f.name, f.getvalue())
+                    recorded = ingest.ingest_file(f.name, data)
                 except (Exception, SystemExit) as e:
                     st.markdown(
-                        f'<div class="about-card"><p><b>{f.name} — could not process.</b><br>{e}</p></div>',
+                        f'<div class="about-card"><p><b>{f.name} — could not process.</b><br>{e}</p>{source_line}</div>',
                         unsafe_allow_html=True,
                     )
                     continue
             if not recorded:
                 st.markdown(
-                    f'<div class="about-card"><p><b>{f.name}:</b> no decisions found to record.</p></div>',
+                    f'<div class="about-card"><p><b>{f.name}:</b> no decisions found to record.</p>{source_line}</div>',
                     unsafe_allow_html=True,
                 )
                 continue
@@ -524,7 +538,7 @@ def render_ingest() -> None:
             items = "".join(f'<li><b>{r["topic"]}</b>: {r["new_state"]}</li>' for r in recorded)
             st.markdown(
                 f'<div class="about-card"><span class="about-verb">Appended {len(recorded)}</span>'
-                f'<h3>{f.name}</h3><ul>{items}</ul></div>',
+                f'<h3>{f.name}</h3><ul>{items}</ul>{source_line}</div>',
                 unsafe_allow_html=True,
             )
         if total:
