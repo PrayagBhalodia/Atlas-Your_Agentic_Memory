@@ -11,7 +11,7 @@ guarantees the "same model, same dimension" invariant on both sides (TRACK_A §5
 """
 from psycopg2.extras import RealDictCursor
 
-from connection import get_conn
+from connection import get_conn, put_conn
 from embeddings import embed_tag, embed_query, to_pgvector
 
 
@@ -41,7 +41,7 @@ def search_memory_index(query_text: str,
             )
             rows = cur.fetchall()
     finally:
-        conn.close()
+        put_conn(conn)
 
     results = []
     for r in rows:
@@ -75,14 +75,17 @@ def fetch_decisions(id_list: list[str]) -> list[dict]:
             )
             rows = cur.fetchall()
     finally:
-        conn.close()
+        put_conn(conn)
 
     by_id = {str(r["id"]): r for r in rows}
     out = []
-    for wanted in id_list:
-        r = by_id.get(str(wanted))
-        if r is None:
+    seen: set[str] = set()  # search can return several index rows per decision, so the
+    for wanted in id_list:  # model may pass duplicate ids — return each record once
+        wid = str(wanted)
+        r = by_id.get(wid)
+        if r is None or wid in seen:
             continue
+        seen.add(wid)
         out.append({
             "id": str(r["id"]),
             "topic": r["topic"],
@@ -114,7 +117,7 @@ def list_decisions() -> list[dict]:
             )
             rows = cur.fetchall()
     finally:
-        conn.close()
+        put_conn(conn)
     return [{
         "id": str(r["id"]),
         "topic": r["topic"],
@@ -178,7 +181,7 @@ def _insert_decision(topic: str, old_state, new_state: str, cause, trigger_event
         conn.rollback()
         raise
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 def record_decision(topic: str, old_state, new_state: str, cause, trigger_event,

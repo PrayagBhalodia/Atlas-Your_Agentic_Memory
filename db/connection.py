@@ -13,10 +13,12 @@ Why the sslrootcert normalization:
   no cert download, works regardless of OpenSSL's compiled default.
 """
 import os
+import threading
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from dotenv import load_dotenv
 import psycopg2
+from psycopg2 import pool as _pg_pool
 
 load_dotenv()
 
@@ -60,6 +62,33 @@ def get_dsn() -> str:
     return _normalize_dsn(url)
 
 
+# One pool for the whole process, so an agentic question (which fans out to many
+# search/fetch/record calls across three agents) reuses a handful of connections
+# instead of doing a fresh TLS+auth handshake to CockroachDB Serverless every call.
+# Module state survives Streamlit reruns, so the pool persists across interactions.
+_POOL_MIN = int(os.getenv("DB_POOL_MIN", "1"))
+_POOL_MAX = int(os.getenv("DB_POOL_MAX", "8"))
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:  # double-checked locking: only the first caller builds the pool
+        with _pool_lock:
+            if _pool is None:
+                _pool = _pg_pool.ThreadedConnectionPool(_POOL_MIN, _POOL_MAX, get_dsn())
+    return _pool
+
+
 def get_conn():
-    """A new psycopg2 connection (autocommit off). Caller manages the transaction."""
-    return psycopg2.connect(get_dsn())
+    """Borrow a pooled psycopg2 connection (autocommit off). Return it with put_conn()."""
+    return _get_pool().getconn()
+
+
+def put_conn(conn) -> None:
+    """Return a connection to the pool. putconn rolls back any open transaction; if the
+    connection is already dead (e.g. the server dropped an idle link) it's discarded."""
+    if conn is None:
+        return
+    _get_pool().putconn(conn, close=bool(getattr(conn, "closed", 0)))

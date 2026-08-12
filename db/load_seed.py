@@ -10,7 +10,7 @@ Run:  ./.venv/bin/python db/load_seed.py
 import json
 import pathlib
 
-from connection import get_conn
+from connection import get_conn, put_conn
 from tools import _insert_decision
 
 SEED_PATH = pathlib.Path(__file__).with_name("seed_decisions.json")
@@ -25,7 +25,7 @@ def main() -> None:
             cur.execute("TRUNCATE decisions CASCADE;")  # also clears memory_index (FK)
         conn.commit()
     finally:
-        conn.close()
+        put_conn(conn)
 
     print(f"Cleared tables. Embedding + inserting {len(records)} decisions...")
     for i, rec in enumerate(records, 1):

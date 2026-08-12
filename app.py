@@ -11,10 +11,19 @@ ink, process blue, redline used only semantically. Archivo display + IBM Plex Sa
 
 Run:  streamlit run app.py
 """
+import html as html_lib
+
 import streamlit as st
 
 # --- Page config -------------------------------------------------------------
 st.set_page_config(page_title="Atlas — Agentic Memory", layout="wide")
+
+
+def _esc(value) -> str:
+    """HTML-escape any value that gets interpolated into unsafe_allow_html markup.
+    DB rows and model output originate from user-supplied documents, so rendering them
+    unescaped would let an uploaded file inject markup/script into the page."""
+    return html_lib.escape(str(value)) if value is not None else ""
 
 WELCOME = (
     "I'm **Atlas**. I remember what your company believed, when, and why it changed "
@@ -49,29 +58,36 @@ def _event_md(ev: dict) -> str:
     kept concise and readable — the search phrase, the records actually used, the agent's view."""
     kind, agent = ev.get("type"), ev.get("agent", "")
 
+    if kind == "phase":
+        return f'<div class="think-step">{_esc(ev.get("text", ""))}</div>'
+
     if kind == "agent_start":
-        return f'<div class="think-agent">{agent} Agent</div>'
+        return f'<div class="think-agent">{_esc(agent)} Agent</div>'
 
     if kind == "tool_call":
         tool, inp = ev["tool"], ev.get("input", {})
         if tool == "search_memory_index":
-            return f'<div class="think-step">Searched memory for “{inp.get("query_text", "")}”</div>'
+            return f'<div class="think-step">Searched memory for “{_esc(inp.get("query_text", ""))}”</div>'
         if tool == "record_decision":
-            return f'<div class="think-step">Recorded a new decision: <span class="ref">{inp.get("topic", "")}</span></div>'
+            return f'<div class="think-step">Recorded a new decision: <span class="ref">{_esc(inp.get("topic", ""))}</span></div>'
         return ""  # fetch call is covered by its result line
 
     if kind == "tool_result":
-        tool, res = ev["tool"], ev.get("result") or []
+        tool, res = ev["tool"], ev.get("result")
+        if isinstance(res, dict) and "error" in res:  # hardened tool wrapper feeds errors back
+            return f'<div class="think-step">Tool hiccup (recovering): {_esc(res["error"])}</div>'
+        if not isinstance(res, list):
+            return ""
         if tool == "search_memory_index" and not res:
             return '<div class="think-step">Found no relevant records</div>'
         if tool == "fetch_decisions" and res:
             topics = list(dict.fromkeys(r["topic"] for r in res))
-            names = ", ".join(f'<span class="ref">{t}</span>' for t in topics)
+            names = ", ".join(f'<span class="ref">{_esc(t)}</span>' for t in topics)
             return f'<div class="think-step">Read {len(res)} record(s) on {names}</div>'
         return ""  # non-empty search result and record result add no readable value
 
     if kind == "agent_view" and agent in ("Finance", "Product"):
-        return f'<div class="think-view">{ev.get("text", "")}</div>'
+        return f'<div class="think-view">{_esc(ev.get("text", ""))}</div>'
 
     return ""
 
@@ -88,10 +104,11 @@ def inject_theme() -> None:
             --vellum:     #F7F9FB;
             --ink:        #16324A;
             --process:    #2F6D9B;
-            --faded:      #5E7385;
+            --sage:       #4E6151;
+            --faded:      #4F6274;
             --redline:    #B0342B;
-            --grid:       rgba(22, 50, 74, 0.055);
-            --grid-major: rgba(22, 50, 74, 0.09);
+            --grid:       rgba(22, 50, 74, 0.05);
+            --grid-major: rgba(22, 50, 74, 0.06);
             --line:       rgba(22, 50, 74, 0.22);
         }
 
@@ -118,11 +135,14 @@ def inject_theme() -> None:
         [data-testid="stBottom"], [data-testid="stBottom"] > div { background: transparent; }
         [data-testid="stBottom"] .stChatInput { max-width: 1040px; margin: 0 auto; }
 
-        /* Content column: wider than default so the grid margins don't feel empty,
-           and top padding to clear the fixed full-width navbar. */
+        /* Content column framed as a drafting "sheet": flat paper interior (so the grid shows
+           only in the margins = the table), thin side rules, and a soft depth shadow. */
         .block-container {
             max-width: 1040px; margin: 0 auto;
-            padding-top: 5.2rem; padding-bottom: 7rem;
+            padding: 5.2rem clamp(1.5rem, 4vw, 3.4rem) 7rem;
+            background: var(--paper);
+            border-left: 1.5px solid var(--line); border-right: 1.5px solid var(--line);
+            box-shadow: 0 0 40px -22px rgba(22, 50, 74, 0.5);
         }
 
         /* Masthead ----------------------------------------------------------- */
@@ -133,17 +153,12 @@ def inject_theme() -> None:
         }
         .atlas-wordmark {
             font-family: 'Archivo', sans-serif; font-weight: 800;
-            font-size: 3rem; line-height: 1; letter-spacing: -0.015em;
+            font-size: 2.2rem; line-height: 1; letter-spacing: -0.015em;
             color: var(--ink); margin: 0;
         }
         .atlas-tagline {
             font-family: 'IBM Plex Sans', sans-serif;
             font-size: 1.02rem; color: var(--faded); margin-top: 0.55rem;
-        }
-        .atlas-specline {
-            font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; font-weight: 500;
-            letter-spacing: 0.16em; text-transform: uppercase; color: var(--faded);
-            margin-top: 0.9rem;
         }
         .atlas-rule {
             height: 2px; border: none; margin: 1.3rem 0 0.4rem;
@@ -198,6 +213,9 @@ def inject_theme() -> None:
         }
         .nav-links a:hover { border-bottom-color: var(--redline); }
         .nav-links a.active { border-bottom-color: var(--process); color: var(--process); }
+        .nav-links a:focus-visible, .nav-brand:focus-visible {
+            outline: 2px solid var(--process); outline-offset: 3px; border-radius: 2px;
+        }
         .nav-meta {
             font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; font-weight: 500;
             letter-spacing: 0.14em; text-transform: uppercase; color: var(--faded);
@@ -272,10 +290,11 @@ def inject_theme() -> None:
         }
         .side-status {
             font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; font-weight: 600;
-            letter-spacing: 0.1em; text-transform: uppercase; color: var(--redline);
-            border: 1.5px solid var(--redline); border-radius: 2px;
-            display: inline-block; padding: 2px 9px; margin-top: 0.8rem;
+            letter-spacing: 0.1em; text-transform: uppercase; color: var(--sage);
+            border: 1.5px solid var(--sage); border-radius: 2px;
+            display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; margin-top: 0.8rem;
         }
+        .side-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--sage); }
         .side-rule { height: 1.5px; border: none; background: var(--line); margin: 1.2rem 0; }
 
         /* Page headers for Timeline / About --------------------------------- */
@@ -283,6 +302,9 @@ def inject_theme() -> None:
             letter-spacing: -0.01em; color: var(--ink); margin: 0; }
         .page-sub { font-family: 'IBM Plex Sans', sans-serif; color: var(--faded);
             margin-top: 0.5rem; font-size: 1rem; max-width: 60ch; }
+        .chat-hint { font-size: 0.9rem; color: var(--faded); margin: 0.6rem 0 0 2px; max-width: 62ch; }
+        .reg-current { font-size: 0.9rem; color: var(--ink); margin-bottom: 12px;
+            padding-left: 11px; border-left: 2px solid var(--process); }
 
         /* Decision Register (Timeline page) --------------------------------- */
         .reg-topic { margin-bottom: 2.2rem; }
@@ -369,13 +391,24 @@ def inject_theme() -> None:
     )
 
 
-# --- Session state -----------------------------------------------------------
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": WELCOME}]
+# --- Chat history ------------------------------------------------------------
+@st.cache_resource(show_spinner=False)
+def _chat_store() -> dict:
+    """Server-side chat history. Navbar links do a full page reload (new Streamlit
+    session), which wipes st.session_state — this cache_resource singleton lives with
+    the server process instead, so the conversation survives hopping between pages.
+    Single-user demo scope: all browser tabs share this one conversation."""
+    return {"messages": [{"role": "assistant", "content": WELCOME}]}
+
+
+messages = _chat_store()["messages"]
+
+# Error replies produced by generate_response's handler — used to flip the status UI.
+_ERROR_PREFIXES = ("**Atlas is rate-limited", "**Atlas can't reach", "**Something went wrong")
 
 
 def send(user_message: str) -> None:
-    st.session_state.messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "user", "content": user_message})
     trace = []
     with st.status("Atlas is consulting its agents…", expanded=True) as status:
         def on_event(ev):
@@ -383,9 +416,13 @@ def send(user_message: str) -> None:
             md = _event_md(ev)
             if md:
                 st.markdown(md, unsafe_allow_html=True)
-        reply = generate_response(user_message, st.session_state.messages, on_event)
-        status.update(label="Atlas answered", state="complete", expanded=False)
-    st.session_state.messages.append({"role": "assistant", "content": reply, "trace": trace})
+        reply = generate_response(user_message, messages, on_event)
+        if reply.startswith(_ERROR_PREFIXES):
+            status.update(label="Atlas hit a problem", state="error", expanded=False)
+        else:
+            status.update(label="Atlas answered", state="complete", expanded=False)
+    messages.append({"role": "assistant", "content": reply, "trace": trace})
+    _memory_stats.clear()  # a write-back may have changed the counts shown in the sidebar
 
 
 # --- Page routing ------------------------------------------------------------
@@ -415,13 +452,12 @@ def render_chat() -> None:
             <div class="atlas-kicker">Time-aware organizational memory</div>
             <h1 class="atlas-wordmark">Atlas</h1>
             <div class="atlas-tagline">What your company believed, when, and why it changed its mind.</div>
-            <div class="atlas-specline">Append-only ledger &middot; Vector-indexed recall &middot; Agents write back</div>
             <hr class="atlas-rule">
         </div>
         """,
         unsafe_allow_html=True,
     )
-    for msg in st.session_state.messages:
+    for msg in messages:
         with st.chat_message(msg["role"]):
             if msg.get("trace"):
                 with st.expander("Agent reasoning"):
@@ -430,6 +466,12 @@ def render_chat() -> None:
                         if md:
                             st.markdown(md, unsafe_allow_html=True)
             st.markdown(msg["content"])
+    if len(messages) == 1:
+        st.markdown(
+            '<div class="chat-hint">Ask how a decision changed over time, or a resourcing '
+            'question — Finance, Product, and Strategy each weigh in, then Strategy answers.</div>',
+            unsafe_allow_html=True,
+        )
     if prompt := st.chat_input("Ask about the company's decision history"):
         send(prompt)
         st.rerun()
@@ -477,7 +519,7 @@ def render_timeline() -> None:
         topics.setdefault(d["topic"], []).append(d)
 
     def prov_row(label: str, value) -> str:
-        return f"<div><dt>{label}</dt><dd>{value}</dd></div>" if value else ""
+        return f"<div><dt>{label}</dt><dd>{_esc(value)}</dd></div>" if value else ""
 
     def topic_html(revs: list) -> str:
         rows = ['<div class="reg-body">']
@@ -493,18 +535,24 @@ def render_timeline() -> None:
                 f'<article class="rev {state}">'
                 f'<div class="rev-head"><span class="rev-id">Rev {letter}</span>'
                 f'<time>{(d["created_at"] or "")[:10]}</time>{stamp}'
-                f'<span class="recorded">— {d["recorded_by"]}</span></div>'
-                f'<p class="belief">{d["new_state"]}</p>'
+                f'<span class="recorded">— {_esc(d["recorded_by"])}</span></div>'
+                f'<p class="belief">{_esc(d["new_state"])}</p>'
                 f'<dl class="prov">{prov_row("Cause", d["cause"])}{prov_row("Trigger", d["trigger_event"])}{prov_row("Tension", d["tension"])}</dl>'
                 f'</article>'
             )
         rows.append("</div>")
         return "".join(rows)
 
-    # Each topic is a collapsible dropdown; its label shows the current state at a glance.
-    for topic, revs in topics.items():
+    # Collapsible per-topic dropdowns, most recently changed topic first (freshly
+    # ingested or written-back topics surface at the top of the register).
+    ordered = sorted(topics.items(),
+                     key=lambda kv: max((d["created_at"] or "") for d in kv[1]),
+                     reverse=True)
+    for topic, revs in ordered:
         current_state = revs[-1]["new_state"]
-        with st.expander(f"{topic}  —  {len(revs)} revisions  ·  now: {current_state}", expanded=False):
+        n = len(revs)
+        with st.expander(f"{topic}  ·  {n} revision{'s' if n != 1 else ''}", expanded=False):
+            st.markdown(f'<div class="reg-current">Current: {_esc(current_state)}</div>', unsafe_allow_html=True)
             st.markdown(topic_html(revs), unsafe_allow_html=True)
 
 
@@ -561,44 +609,65 @@ def render_ingest() -> None:
                 try:
                     with st.spinner(f"Staging {f.name} in S3…"):
                         uri = storage.upload_document(f.name, data)
-                    source_line = f'<div class="ingest-src">Staged in S3: <code>{uri}</code></div>'
+                    source_line = f'<div class="ingest-src">Staged in S3: <code>{_esc(uri)}</code></div>'
                 except Exception as e:
-                    source_line = f'<div class="ingest-src">S3 staging skipped: {e}</div>'
+                    source_line = f'<div class="ingest-src">S3 staging skipped: {_esc(e)}</div>'
             # 2) distill + append to memory
             with st.spinner(f"Distilling {f.name} and saving decisions…"):
                 try:
                     recorded = ingest.ingest_file(f.name, data)
                 except (Exception, SystemExit) as e:
                     st.markdown(
-                        f'<div class="about-card"><p><b>{f.name} — could not process.</b><br>{e}</p>{source_line}</div>',
+                        f'<div class="about-card"><p><b>{_esc(f.name)} — could not process.</b><br>{_esc(e)}</p>{source_line}</div>',
                         unsafe_allow_html=True,
                     )
                     continue
             if not recorded:
                 st.markdown(
-                    f'<div class="about-card"><p><b>{f.name}:</b> no decisions found to record.</p>{source_line}</div>',
+                    f'<div class="about-card"><p><b>{_esc(f.name)}:</b> no decisions found to record.</p>{source_line}</div>',
                     unsafe_allow_html=True,
                 )
                 continue
             total += len(recorded)
-            items = "".join(f'<li><b>{r["topic"]}</b>: {r["new_state"]}</li>' for r in recorded)
+            items = "".join(f'<li><b>{_esc(r["topic"])}</b>: {_esc(r["new_state"])}</li>' for r in recorded)
             st.markdown(
                 f'<div class="about-card"><span class="about-verb">Appended {len(recorded)}</span>'
-                f'<h3>{f.name}</h3><ul>{items}</ul>{source_line}</div>',
+                f'<h3>{_esc(f.name)}</h3><ul>{items}</ul>{source_line}</div>',
                 unsafe_allow_html=True,
             )
         if total:
+            _memory_stats.clear()  # sidebar counts changed — drop the 30s cache now
             st.success(f"Appended {total} decision(s) to memory. Open the Timeline to see them.")
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _memory_stats() -> tuple[int, int]:
+    """(topics, decisions) currently in memory — cached briefly so it's cheap per page."""
+    import os
+    import sys
+    db_dir = os.path.join(os.path.dirname(__file__), "db")
+    if db_dir not in sys.path:
+        sys.path.insert(0, db_dir)
+    import tools as memory
+    decs = memory.list_decisions()
+    return len({d["topic"] for d in decs}), len(decs)
 
 
 def render_sidebar(active: str) -> None:
     with st.sidebar:
         st.markdown('<div class="side-brand">ATLAS</div>', unsafe_allow_html=True)
-        st.markdown('<div class="side-meta">Sheet 01 &middot; Rev C<br>2026-08-09</div>', unsafe_allow_html=True)
-        st.markdown('<div class="side-status">Live agent — mock memory</div>', unsafe_allow_html=True)
+        try:
+            topics, count = _memory_stats()
+            st.markdown(f'<div class="side-meta">{topics} topics &middot; {count} decisions</div>',
+                        unsafe_allow_html=True)
+        except Exception:
+            pass
+        st.markdown('<div class="side-status">Live &middot; CockroachDB</div>', unsafe_allow_html=True)
         st.markdown('<hr class="side-rule">', unsafe_allow_html=True)
         if active == "chat" and st.button("Reset conversation", use_container_width=True):
-            st.session_state.messages = [{"role": "assistant", "content": WELCOME}]
+            # Mutate in place — the cached store holds a reference to this exact list.
+            messages.clear()
+            messages.append({"role": "assistant", "content": WELCOME})
             st.rerun()
 
 

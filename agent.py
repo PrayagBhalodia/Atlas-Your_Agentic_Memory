@@ -10,10 +10,14 @@ Requires in .env: GEMINI_API_KEY, COCKROACH_DATABASE_URL.
 """
 import os
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
+
 
 _DB_DIR = os.path.join(os.path.dirname(__file__), "db")
 if _DB_DIR not in sys.path:
@@ -23,7 +27,22 @@ import tools as memory  # db/tools.py: search_memory_index / fetch_decisions / r
 load_dotenv()
 
 _client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-flash-latest")
+# Default to flash-lite: ~1000 free requests/day vs ~20 on the flagship — if the env var
+# ever goes missing, the app degrades to a slower-quota model instead of dying mid-demo.
+_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-flash-lite-latest")
+
+
+def _generate(**kwargs):
+    """generate_content with a short backoff-retry on transient 429/5xx, so one flaky
+    call doesn't kill a whole multi-agent answer. Per-day quota exhaustion is not
+    retried — waiting seconds can't fix a daily limit."""
+    for attempt in range(3):
+        try:
+            return _client.models.generate_content(**kwargs)
+        except genai_errors.APIError as e:
+            if getattr(e, "code", None) not in (429, 500, 503) or "PerDay" in str(e) or attempt == 2:
+                raise
+            time.sleep(1.5 * (attempt + 1))
 
 
 # --- Tool declarations -------------------------------------------------------
@@ -107,17 +126,52 @@ _STRATEGY_TOOLS = dict(_SPECIALIST_TOOLS, record_decision=_record_decision)
 _STRATEGY_DECLS = [_SEARCH_DECL, _FETCH_DECL, _RECORD_DECL]
 
 
-def _run(system, tool_map, declarations, prompt, on_event=None, agent="") -> str:
+_MAX_HISTORY_TURNS = 6  # prior chat turns to carry so follow-ups have context
+
+
+def _history_contents(history, current_question):
+    """Turn prior chat messages into Gemini turns so follow-up questions ("why?",
+    "what about Q3?") resolve against the conversation instead of starting cold.
+
+    The UI passes st.session_state.messages, which (a) opens with a canned welcome and
+    (b) already includes the just-asked question as its last item — we drop both so the
+    history ends before the current turn and starts on a user turn.
+    """
+    if not history:
+        return []
+    turns = []
+    for msg in history:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        text = (msg.get("content") or "").strip()
+        if role in ("user", "assistant") and text:
+            turns.append((role, text))
+    if turns and turns[-1][0] == "user" and turns[-1][1] == (current_question or "").strip():
+        turns = turns[:-1]
+    while turns and turns[0][0] == "assistant":  # drop leading welcome(s)
+        turns = turns[1:]
+    turns = turns[-_MAX_HISTORY_TURNS:]
+    return [
+        types.Content(role=("model" if role == "assistant" else "user"),
+                      parts=[types.Part(text=text)])
+        for role, text in turns
+    ]
+
+
+def _run(system, tool_map, declarations, prompt, on_event=None, agent="", history=None) -> str:
     """Generic Gemini tool-use loop: run until the model answers in text.
+    `history` (Gemini Contents) seeds prior turns before this prompt for multi-turn context.
     on_event(dict), if given, receives tool_call / tool_result events for the thinking trace."""
     config = types.GenerateContentConfig(
         system_instruction=system,
         tools=[types.Tool(function_declarations=declarations)],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
-    conversation = [types.Content(role="user", parts=[types.Part(text=prompt)])]
+    conversation = list(history or [])
+    conversation.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
     for _ in range(8):  # safety cap
-        response = _client.models.generate_content(model=_MODEL, contents=conversation, config=config)
+        response = _generate(model=_MODEL, contents=conversation, config=config)
         if not response.function_calls:
             return response.text.strip()
         conversation.append(response.candidates[0].content)
@@ -126,14 +180,26 @@ def _run(system, tool_map, declarations, prompt, on_event=None, agent="") -> str
             args = dict(call.args)
             if on_event:
                 on_event({"type": "tool_call", "agent": agent, "tool": call.name, "input": args})
-            result = tool_map[call.name](**args)
+            # A hallucinated tool name or malformed args must not crash the whole answer —
+            # feed the error back as the tool result so the model can correct itself.
+            # (SystemExit — e.g. missing DB URL — still propagates to the app's handler.)
+            fn = tool_map.get(call.name)
+            if fn is None:
+                result = {"error": f"unknown tool '{call.name}' — use only the declared tools"}
+            else:
+                try:
+                    result = fn(**args)
+                except TypeError as e:
+                    result = {"error": f"bad arguments for {call.name}: {e}"}
+                except Exception as e:
+                    result = {"error": f"{call.name} failed: {type(e).__name__}: {e}"}
             if on_event:
                 on_event({"type": "tool_result", "agent": agent, "tool": call.name, "result": result})
             result_parts.append(types.Part.from_function_response(name=call.name, response={"result": result}))
         conversation.append(types.Content(role="user", parts=result_parts))
     conversation.append(types.Content(role="user", parts=[types.Part(
         text="Answer now using only what you have; if nothing relevant was found, say so.")]))
-    final = _client.models.generate_content(
+    final = _generate(
         model=_MODEL, contents=conversation,
         config=types.GenerateContentConfig(system_instruction=system))
     return final.text.strip()
@@ -150,13 +216,29 @@ def answer(question: str, history=None, on_event=None) -> str:
         if on_event:
             on_event(ev)
 
-    emit({"type": "agent_start", "agent": "Finance"})
-    finance_view = _run(_FINANCE_SYSTEM, _SPECIALIST_TOOLS, _SPECIALIST_DECLS, question, on_event, "Finance")
-    emit({"type": "agent_view", "agent": "Finance", "text": finance_view})
+    # Shared prior-turn context so every agent can resolve follow-up questions.
+    hist = _history_contents(history, question)
 
-    emit({"type": "agent_start", "agent": "Product"})
-    product_view = _run(_PRODUCT_SYSTEM, _SPECIALIST_TOOLS, _SPECIALIST_DECLS, question, on_event, "Product")
-    emit({"type": "agent_view", "agent": "Product", "text": product_view})
+    # Finance and Product are independent, so they run in parallel (the DB layer uses a
+    # ThreadedConnectionPool for exactly this). Each thread buffers its trace events
+    # locally; we emit them grouped from THIS thread afterwards — both for a readable
+    # trace and because Streamlit UI callbacks may only run on the main script thread.
+    def _specialist(name: str, system: str):
+        events: list[dict] = []
+        events.append({"type": "agent_start", "agent": name})
+        view = _run(system, _SPECIALIST_TOOLS, _SPECIALIST_DECLS, question,
+                    events.append, name, history=hist)
+        events.append({"type": "agent_view", "agent": name, "text": view})
+        return view, events
+
+    emit({"type": "phase", "text": "Finance and Product are analyzing in parallel…"})
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        finance_future = pool.submit(_specialist, "Finance", _FINANCE_SYSTEM)
+        product_future = pool.submit(_specialist, "Product", _PRODUCT_SYSTEM)
+        finance_view, finance_events = finance_future.result()
+        product_view, product_events = product_future.result()
+    for ev in finance_events + product_events:
+        emit(ev)
 
     emit({"type": "agent_start", "agent": "Strategy"})
     strategy_prompt = (
@@ -165,6 +247,6 @@ def answer(question: str, history=None, on_event=None) -> str:
         f"Product Agent's view:\n{product_view}\n\n"
         "Now produce the final answer."
     )
-    final = _run(_STRATEGY_SYSTEM, _STRATEGY_TOOLS, _STRATEGY_DECLS, strategy_prompt, on_event, "Strategy")
+    final = _run(_STRATEGY_SYSTEM, _STRATEGY_TOOLS, _STRATEGY_DECLS, strategy_prompt, on_event, "Strategy", history=hist)
     emit({"type": "agent_view", "agent": "Strategy", "text": final})
     return final

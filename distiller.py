@@ -13,15 +13,17 @@ structured records; the reasoning is preserved, never dropped.)
 """
 import json
 import os
+import time
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 load_dotenv()
 
 _client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-flash-latest")
+_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-flash-lite-latest")
 _MAX_CHARS = 120_000  # generous — a long meeting fits; absurdly large inputs get truncated
 
 _SYSTEM = """You are Atlas's distiller. You receive the raw text of a meeting or conversation
@@ -59,11 +61,19 @@ def distill(text: str, known_topics: list[str] | None = None) -> list[dict]:
         return []
     known = ", ".join(sorted(known_topics)) if known_topics else "(none yet)"
     prompt = _SYSTEM.format(known=known) + "\n\n--- CONVERSATION ---\n" + text[:_MAX_CHARS]
-    resp = _client.models.generate_content(
-        model=_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
-    )
+    # Short backoff-retry on transient 429/5xx; per-day quota exhaustion isn't retried.
+    for attempt in range(3):
+        try:
+            resp = _client.models.generate_content(
+                model=_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            break
+        except genai_errors.APIError as e:
+            if getattr(e, "code", None) not in (429, 500, 503) or "PerDay" in str(e) or attempt == 2:
+                raise
+            time.sleep(1.5 * (attempt + 1))
     try:
         data = json.loads(resp.text)
     except (json.JSONDecodeError, TypeError):

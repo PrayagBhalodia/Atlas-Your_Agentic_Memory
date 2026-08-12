@@ -20,3 +20,5 @@ boto3==1.43.67
 pypdf
 python-docx
 python-pptx
+# NOTE: `tools` is NOT a dependency — agent.py imports the local db/tools.py module.
+# Installing the unrelated PyPI package named "tools" would be a mistake.

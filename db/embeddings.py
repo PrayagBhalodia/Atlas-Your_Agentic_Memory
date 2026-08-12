@@ -19,9 +19,11 @@ and normalizing makes cosine/dot-product behave consistently.
 """
 import math
 import os
+import time
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 load_dotenv()
@@ -48,14 +50,23 @@ def _l2_normalize(vec: list[float]) -> list[float]:
 
 
 def _embed(text: str, task_type: str) -> list[float]:
-    resp = _get_client().models.embed_content(
-        model=EMBED_MODEL,
-        contents=text,
-        config=types.EmbedContentConfig(
-            task_type=task_type,
-            output_dimensionality=EMBED_DIM,
-        ),
-    )
+    # Transient 429/5xx get a short backoff-retry; a per-day quota exhaustion is not
+    # retried (waiting seconds can't fix a daily limit) and neither are real errors.
+    for attempt in range(3):
+        try:
+            resp = _get_client().models.embed_content(
+                model=EMBED_MODEL,
+                contents=text,
+                config=types.EmbedContentConfig(
+                    task_type=task_type,
+                    output_dimensionality=EMBED_DIM,
+                ),
+            )
+            break
+        except genai_errors.APIError as e:
+            if getattr(e, "code", None) not in (429, 500, 503) or "PerDay" in str(e) or attempt == 2:
+                raise
+            time.sleep(1.2 * (attempt + 1))
     vec = resp.embeddings[0].values
     if len(vec) != EMBED_DIM:
         raise RuntimeError(f"embedding dim {len(vec)} != expected {EMBED_DIM}")
