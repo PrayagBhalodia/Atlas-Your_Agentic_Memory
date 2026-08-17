@@ -14,6 +14,7 @@ Run:  streamlit run app.py
 import html as html_lib
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 # --- Page config -------------------------------------------------------------
 st.set_page_config(page_title="Atlas — Agentic Memory", layout="wide")
@@ -385,6 +386,72 @@ def inject_theme() -> None:
         [data-testid="stFileUploaderDropzone"] {
             background: var(--vellum); border: 2px dashed var(--line); border-radius: 3px;
         }
+
+        /* Architecture diagram (About page) --------------------------------- */
+        .arch { margin: 1.6rem 0 0.4rem; }
+        .arch-row { display: flex; align-items: stretch; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+        .arch-box {
+            flex: 1 1 160px; min-width: 150px;
+            background: var(--vellum); border: 2px solid var(--ink); border-radius: 3px;
+            padding: 10px 13px;
+        }
+        .arch-box b {
+            font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 0.88rem;
+            color: var(--ink); display: block;
+        }
+        .arch-box span {
+            font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; font-weight: 500;
+            letter-spacing: 0.07em; text-transform: uppercase; color: var(--faded);
+            display: block; margin-top: 4px; line-height: 1.6;
+        }
+        .arch-db { border-color: var(--process); box-shadow: 4px 4px 0 rgba(47, 109, 155, 0.14); }
+        .arch-db b { color: var(--process); }
+        .arch-arrow {
+            align-self: center; flex: none;
+            font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: var(--process);
+        }
+        .arch-caption {
+            font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.06em;
+            text-transform: uppercase; color: var(--faded); margin: 4px 0 1.6rem; line-height: 1.7;
+        }
+        .about-strip {
+            font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; font-weight: 600;
+            letter-spacing: 0.1em; text-transform: uppercase; color: var(--vellum);
+            background: var(--ink); border-radius: 2px; padding: 10px 16px; margin-top: 1.2rem;
+            line-height: 1.8;
+        }
+
+        /* Modern scroll features --------------------------------------------- */
+        /* Smooth anchor/keyboard scrolling on whatever container Streamlit scrolls. */
+        html, [data-testid="stMain"], [data-testid="stAppViewContainer"] { scroll-behavior: smooth; }
+
+        /* Reveal-on-scroll, AOS-style: elements start shifted down + transparent, and when
+           they ENTER the viewport an IntersectionObserver (see inject_scroll_effects) adds
+           .fx-in, playing a smooth eased slide-up on its own clock — a one-time entrance,
+           not scrubbed by scroll position.
+           Safety: the hidden state only applies under body.fx-armed, which the JS sets after
+           it is confirmed running — if scripts fail, nothing is ever stuck invisible. */
+        @media (prefers-reduced-motion: no-preference) {
+            .fx-armed .about-card, .fx-armed .arch-row, .fx-armed .about-strip,
+            .fx-armed .atlas-header, .fx-armed [data-testid="stExpander"] {
+                opacity: 0; transform: translateY(48px);
+                transition: opacity 0.95s cubic-bezier(0.16, 1, 0.3, 1),
+                            transform 0.95s cubic-bezier(0.16, 1, 0.3, 1);
+                will-change: opacity, transform;
+            }
+            .fx-armed .fx-in { opacity: 1; transform: none; }
+        }
+
+        /* Thin progress rule under the navbar; width driven by the scroll listener. */
+        .scroll-progress {
+            position: absolute; left: 0; right: 0; bottom: -5px; height: 3px;
+            background: var(--process); transform-origin: 0 50%; transform: scaleX(0);
+            transition: transform 0.08s linear;
+        }
+
+        /* The zero-height iframe that carries the effects script shouldn't eat layout gap.
+           (display:none doesn't stop iframes from loading/executing their script.) */
+        [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) { display: none; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -439,6 +506,7 @@ def render_navbar(active: str) -> None:
             <a class="nav-brand" href="?view=chat" target="_self"><span class="brand-tile"><span class="brand-glyph"><i></i><i></i><i></i></span></span><span class="brand-stack"><span class="brand-word"><span class="bw-ink">AT</span><span class="bw-accent">LAS</span></span><span class="brand-tag">Time-aware memory</span></span></a>
             <div class="nav-links">{link('chat', 'Chat')}{link('timeline', 'Timeline')}{link('ingest', 'Ingest')}{link('about', 'About')}</div>
             <div class="nav-meta">Sheet 01 &middot; Rev C</div>
+            <div class="scroll-progress"></div>
         </nav>
         """,
         unsafe_allow_html=True,
@@ -560,17 +628,121 @@ def render_about() -> None:
     st.markdown(
         """
         <div class="atlas-header">
-            <div class="atlas-kicker">About</div>
-            <h1 class="page-title">What Atlas is</h1>
-            <div class="page-sub">A shared memory for how your organization thinks and decides.</div>
+            <div class="atlas-kicker">Architecture</div>
+            <h1 class="page-title">How Atlas is built</h1>
+            <div class="page-sub">The engineering behind time-aware organizational memory — documented the
+            way Atlas documents everything: as decisions, each with a cause and a tradeoff.</div>
             <hr class="atlas-rule">
         </div>
-        <div class="about-card">
-            <p>Every organization makes countless decisions, but the reasons behind them fade — scattered across messages and documents, or lost entirely when people move on. Atlas remembers not just what was decided, but why, and how that thinking changed over time. So the story behind every choice stays with the organization, instead of living in one person's head.</p>
+
+        <div class="arch">
+            <div class="arch-row">
+                <div class="arch-box"><b>Streamlit UI</b><span>chat &middot; timeline &middot; ingest</span></div>
+                <div class="arch-arrow">&rarr;</div>
+                <div class="arch-box"><b>Three agents</b><span>Finance &#8741; Product in parallel &middot; Strategy synthesizes</span></div>
+                <div class="arch-arrow">&rarr;</div>
+                <div class="arch-box"><b>Typed tools</b><span>search &middot; fetch &middot; record</span></div>
+                <div class="arch-arrow">&rarr;</div>
+                <div class="arch-box arch-db"><b>CockroachDB</b><span>decisions (append-only) + memory_index (HNSW vectors)</span></div>
+            </div>
+            <div class="arch-row">
+                <div class="arch-box"><b>Documents</b><span>pdf &middot; docx &middot; pptx &middot; md</span></div>
+                <div class="arch-arrow">&rarr;</div>
+                <div class="arch-box"><b>Amazon S3</b><span>original staged for provenance</span></div>
+                <div class="arch-arrow">&rarr;</div>
+                <div class="arch-box"><b>Distiller agent</b><span>one structured record per change</span></div>
+                <div class="arch-arrow">&rarr;</div>
+                <div class="arch-box arch-db"><b>record_decision</b><span>same append-only store</span></div>
+            </div>
+            <div class="arch-caption">Query path (top) and ingestion path (bottom) converge on one
+            transactional store — agent reads, agent write-backs, and document ingestion all share
+            the same memory.</div>
         </div>
-        <div class="about-card"><span class="about-verb">Remembers</span><h3>Nothing gets erased</h3><p>When thinking changes, Atlas keeps the earlier version instead of writing over it. The full history stays intact, so you can always trace how a decision came to be what it is today.</p></div>
-        <div class="about-card"><span class="about-verb">Understands</span><h3>Ask in plain words</h3><p>You can ask Atlas a question the way you would ask a colleague. It works out what you actually mean and brings back the decisions that matter — no need to recall exact wording or remember where anything was written down.</p></div>
-        <div class="about-card"><span class="about-verb">Learns</span><h3>Gets better over time</h3><p>Each time Atlas works something out, it adds that to what it knows. The picture of how your organization thinks grows richer the more you use it.</p></div>
+
+        <div class="about-card"><span class="about-verb">DEC-01 &middot; Storage</span>
+            <h3>Append-only ledger — beliefs are never overwritten</h3>
+            <p><b>Decision:</b> every change of stance is a new row; there is no UPDATE path. Cause,
+            trigger, and tension are first-class columns, not prose.</p>
+            <p><b>Why:</b> "why did we change our mind?" is only answerable if the old state survives.
+            Storing the reasoning as structured fields means provenance is retrieved, never
+            reconstructed by a model guessing after the fact.</p>
+            <p><b>Tradeoff:</b> more rows and a revision chain to maintain — the price of a history you
+            can actually trust.</p>
+        </div>
+
+        <div class="about-card"><span class="about-verb">DEC-02 &middot; Retrieval</span>
+            <h3>Two-tier memory: cheap vector index, precise fetch</h3>
+            <p><b>Decision:</b> a compact index of short tags (1536-dim embeddings under an HNSW index)
+            points at full records. Search scans tags; only chosen ids are fetched in full.</p>
+            <p><b>Why:</b> scanning the index costs a few dozen tokens, and the agent reads only the
+            records it selects. Matching is threshold-based (0.65 — calibrated from measured score
+            separation: relevant &ge; 0.73, noise &le; 0.56), so an unrelated question returns
+            nothing instead of force-matching the wrong topic.</p>
+            <p><b>Tradeoff:</b> two writes per decision — closed by committing the record and its index
+            row in a single transaction.</p>
+        </div>
+
+        <div class="about-card"><span class="about-verb">DEC-03 &middot; Agency</span>
+            <h3>Retrieval is an agent decision, not a pipeline</h3>
+            <p><b>Decision:</b> search and fetch are separate typed tools the model calls; there is no
+            hardcoded retrieve-then-answer chain.</p>
+            <p><b>Why:</b> the agent decides when to search, which results matter, and how deep to read
+            — retrieval strategy is model behavior, which is what separates agentic memory from fixed
+            RAG. When a tool call fails or a search comes back empty, the error or empty result is fed
+            back to the model so it can recover or honestly say there is no record.</p>
+            <p><b>Tradeoff:</b> more model calls than a fixed pipeline — absorbed with flash-tier
+            models and parallelism.</p>
+        </div>
+
+        <div class="about-card"><span class="about-verb">DEC-04 &middot; Multi-agent</span>
+            <h3>Domain-constrained specialists, run in parallel</h3>
+            <p><b>Decision:</b> every question fans out to a Finance agent and a Product agent
+            concurrently — each restricted by its system prompt to its own domain, each grounding
+            itself in the shared memory — then a Strategy agent synthesizes both views with the
+            decision history.</p>
+            <p><b>Why:</b> perspectives stay honest instead of blending into one voice, and running the
+            independent specialists on a thread pool (over a pooled DB connection) cuts answer latency
+            by roughly a third. The full reasoning is surfaced in the UI as a live trace.</p>
+            <p><b>Tradeoff:</b> three contexts per question — the cost of showing the work.</p>
+        </div>
+
+        <div class="about-card"><span class="about-verb">DEC-05 &middot; The act loop</span>
+            <h3>Agents write their conclusions back</h3>
+            <p><b>Decision:</b> when Strategy reaches a new recommendation, it records it through the
+            same record_decision tool — query &rarr; retrieve &rarr; reason &rarr; record.</p>
+            <p><b>Why:</b> memory that is only read is a lookup table. Writing conclusions back makes
+            the system's own reasoning part of the queryable history — ask again next month and Atlas
+            cites its own earlier position as the thing that changed.</p>
+            <p><b>Tradeoff:</b> agent-authored rows need attribution — recorded_by distinguishes
+            agents, humans, and ingested documents on every record.</p>
+        </div>
+
+        <div class="about-card"><span class="about-verb">DEC-06 &middot; One store</span>
+            <h3>Relational + vector in a single transactional database</h3>
+            <p><b>Decision:</b> CockroachDB holds both the relational ledger and the vector index; a
+            decision and its searchable pointer commit atomically or not at all.</p>
+            <p><b>Why:</b> a bolted-on vector store can drift from the source of truth — a pointer to a
+            record that no longer exists, or a record no search can find. One system makes that class
+            of bug structurally impossible.</p>
+            <p><b>Tradeoff:</b> a general database's vector features over a specialist store — at
+            tag-scale search, HNSW over 1536 dims is more than enough.</p>
+        </div>
+
+        <div class="about-card"><span class="about-verb">DEC-07 &middot; Ingestion</span>
+            <h3>Documents are distilled, never summarized</h3>
+            <p><b>Decision:</b> an uploaded file is staged in S3, then a distiller agent compresses the
+            raw text into one structured record per change — reusing existing topic labels and
+            extracting real decision dates.</p>
+            <p><b>Why:</b> summarizing prose deletes the connective tissue ("because", "despite") that
+            is the entire product. Distillation compresses the input into cause / trigger / tension
+            fields, so the reasoning survives compression intact — and the S3 original remains as
+            source provenance.</p>
+            <p><b>Tradeoff:</b> strict extraction ignores vague statements — deliberately.</p>
+        </div>
+
+        <div class="about-strip">CockroachDB Serverless &middot; Gemini LLM + embeddings &middot;
+        Amazon S3 &middot; Streamlit &nbsp;&nbsp;|&nbsp;&nbsp; hardened with connection pooling &middot;
+        retry with backoff &middot; tool-error self-correction</div>
         """,
         unsafe_allow_html=True,
     )
@@ -671,6 +843,94 @@ def render_sidebar(active: str) -> None:
             st.rerun()
 
 
+def inject_scroll_effects() -> None:
+    """AOS-style reveal-on-scroll + scroll progress bar.
+
+    Streamlit strips <script> from st.markdown, so the JS rides in a zero-height
+    components.html iframe — same-origin, so it can reach the parent page. It:
+      1. arms the reveal CSS (body.fx-armed) only once it's confirmed running,
+      2. watches reveal targets with an IntersectionObserver and adds .fx-in the
+         moment each enters the viewport (one smooth eased entrance, then done),
+      3. keeps watching DOM mutations so Streamlit reruns/new elements still reveal,
+      4. drives the navbar progress bar from the real scroll position.
+    """
+    components.html(
+        """
+        <script>
+        (function () {
+            const win = window.parent, doc = win.document;
+
+            // Tear down a previous instance (Streamlit reruns re-execute this script).
+            const prev = win.__atlasScrollFx;
+            if (prev) {
+                try {
+                    prev.io.disconnect(); prev.mo.disconnect();
+                    prev.scroller.removeEventListener('scroll', prev.onScroll);
+                } catch (e) {}
+            }
+
+            const SEL = '.about-card, .arch-row, .about-strip, .atlas-header, [data-testid="stExpander"]';
+            const reduced = win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const degenerate = win.innerHeight < 120;  // e.g. a broken/headless embed
+            if (reduced || degenerate || !('IntersectionObserver' in win)) {
+                doc.body.classList.remove('fx-armed');
+                return;
+            }
+            doc.body.classList.add('fx-armed');
+
+            // rootMargin pulls the trigger line 12% up from the viewport bottom, so the
+            // slide-up happens well inside the screen where it's actually seen — not at
+            // the very edge where it finishes before the element is properly visible.
+            // Items triggering in the same batch cascade with a stagger.
+            const io = new win.IntersectionObserver((entries) => {
+                let i = 0;
+                for (const e of entries) {
+                    if (!e.isIntersecting) continue;
+                    const el = e.target;
+                    el.style.transitionDelay = (i++ * 110) + 'ms';
+                    el.classList.add('fx-in');
+                    el.addEventListener('transitionend', () => { el.style.transitionDelay = ''; },
+                                        { once: true });
+                    io.unobserve(el);
+                }
+            }, { threshold: 0.15, rootMargin: '0px 0px -12% 0px' });
+
+            const arm = (root) => {
+                if (!root.querySelectorAll) return;
+                root.querySelectorAll(SEL).forEach((el) => {
+                    if (!el.classList.contains('fx-in')) io.observe(el);
+                });
+            };
+            arm(doc);
+
+            const mo = new win.MutationObserver((muts) => {
+                for (const m of muts) for (const n of m.addedNodes) {
+                    if (n.nodeType !== 1) continue;
+                    if (n.matches && n.matches(SEL)) io.observe(n);
+                    arm(n);
+                }
+            });
+            mo.observe(doc.body, { childList: true, subtree: true });
+
+            // Progress bar: filled proportionally to how far the app's scroller is scrolled.
+            const scroller = doc.querySelector('section[data-testid="stMain"]') || doc.scrollingElement;
+            const onScroll = () => {
+                const bar = doc.querySelector('.scroll-progress');
+                if (!bar) return;
+                const max = scroller.scrollHeight - scroller.clientHeight;
+                bar.style.transform = 'scaleX(' + (max > 0 ? Math.min(1, scroller.scrollTop / max) : 0) + ')';
+            };
+            scroller.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
+
+            win.__atlasScrollFx = { io, mo, scroller, onScroll };
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 # --- Render the current page -------------------------------------------------
 inject_theme()
 
@@ -689,3 +949,5 @@ elif view == "about":
     render_about()
 else:
     render_chat()
+
+inject_scroll_effects()
