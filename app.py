@@ -365,6 +365,23 @@ def inject_theme() -> None:
         .think-view { font-size: 0.88rem; color: var(--ink); margin: 6px 0 4px 16px;
             padding-left: 11px; border-left: 2px solid var(--line); line-height: 1.55; }
 
+        /* Thinking indicator (inline in chat) -------------------------------- */
+        .thinking-indicator {
+            display: inline-flex; align-items: center; gap: 8px;
+            color: var(--faded); font-size: 0.95rem; font-style: italic;
+        }
+        .thinking-indicator .dots { display: inline-flex; gap: 3px; }
+        .thinking-indicator .dots span {
+            width: 6px; height: 6px; border-radius: 50%; background: var(--process);
+            animation: thinking-bounce 1.4s ease-in-out infinite both;
+        }
+        .thinking-indicator .dots span:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-indicator .dots span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes thinking-bounce {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
         /* Timeline topic dropdowns (st.expander) ---------------------------- */
         [data-testid="stExpander"] {
             border: 2px solid var(--ink); border-radius: 3px; background: var(--vellum);
@@ -458,6 +475,9 @@ def inject_theme() -> None:
     )
 
 
+import threading
+import queue
+
 # --- Chat history ------------------------------------------------------------
 @st.cache_resource(show_spinner=False)
 def _chat_store() -> dict:
@@ -473,23 +493,96 @@ messages = _chat_store()["messages"]
 # Error replies produced by generate_response's handler — used to flip the status UI.
 _ERROR_PREFIXES = ("**Atlas is rate-limited", "**Atlas can't reach", "**Something went wrong")
 
+# Timeout for agent response (seconds)
+AGENT_TIMEOUT = 90
+
+
+def _run_with_timeout(func, args, timeout):
+    """Run func(*args) with a timeout, return (success, result_or_error)."""
+    result_queue = queue.Queue()
+    
+    def target():
+        try:
+            result = func(*args)
+            result_queue.put(("success", result))
+        except Exception as e:
+            result_queue.put(("error", e))
+    
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout)
+    
+    if thread.is_alive():
+        return ("timeout", f"**Atlas timed out after {timeout}s.** The agent is taking too long. Try a simpler question or check the database connection.")
+    
+    return result_queue.get()
+
 
 def send(user_message: str) -> None:
+    """Append user message and trigger immediate rerun to show it."""
     messages.append({"role": "user", "content": user_message})
-    trace = []
-    with st.status("Atlas is consulting its agents…", expanded=True) as status:
-        def on_event(ev):
-            trace.append(ev)
-            md = _event_md(ev)
-            if md:
-                st.markdown(md, unsafe_allow_html=True)
-        reply = generate_response(user_message, messages, on_event)
-        if reply.startswith(_ERROR_PREFIXES):
-            status.update(label="Atlas hit a problem", state="error", expanded=False)
-        else:
-            status.update(label="Atlas answered", state="complete", expanded=False)
-    messages.append({"role": "assistant", "content": reply, "trace": trace})
-    _memory_stats.clear()  # a write-back may have changed the counts shown in the sidebar
+    st.rerun()
+
+
+def _find_last_user_idx():
+    """Return index of last user message, or None."""
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i]["role"] == "user":
+            return i
+    return None
+
+
+def generate_and_append_response() -> None:
+    """Generate response for the last user message (if no assistant reply yet)."""
+    last_user_idx = _find_last_user_idx()
+    if last_user_idx is None:
+        return
+
+    # Already has a real (non-thinking) assistant response?
+    if last_user_idx + 1 < len(messages):
+        next_msg = messages[last_user_idx + 1]
+        if next_msg["role"] == "assistant" and not next_msg.get("thinking"):
+            return  # already answered
+
+    # If thinking indicator exists, replace it with real response
+    if last_user_idx + 1 < len(messages) and messages[last_user_idx + 1].get("thinking"):
+        user_message = messages[last_user_idx]["content"]
+        trace = []
+        with st.status("Atlas is consulting its agents…", expanded=True) as status:
+            def on_event(ev):
+                trace.append(ev)
+                md = _event_md(ev)
+                if md:
+                    st.markdown(md, unsafe_allow_html=True)
+            
+            result = _run_with_timeout(
+                generate_response,
+                (user_message, messages, on_event),
+                AGENT_TIMEOUT
+            )
+            
+            if result[0] == "success":
+                reply = result[1]
+                if reply.startswith(_ERROR_PREFIXES):
+                    status.update(label="Atlas hit a problem", state="error", expanded=False)
+                else:
+                    status.update(label="Atlas answered", state="complete", expanded=False)
+            elif result[0] == "timeout":
+                reply = result[1]
+                status.update(label="Atlas timed out", state="error", expanded=False)
+            else:  # error
+                reply = f"**Something went wrong reaching the agent.**\n\n`{type(result[1]).__name__}: {result[1]}`"
+                status.update(label="Atlas hit a problem", state="error", expanded=False)
+        
+        # Replace thinking message with real response
+        messages[last_user_idx + 1] = {"role": "assistant", "content": reply, "trace": trace}
+        _memory_stats.clear()
+        st.rerun()
+        return
+
+    # First pass: insert thinking indicator after user message
+    messages.insert(last_user_idx + 1, {"role": "assistant", "thinking": True})
+    st.rerun()
 
 
 # --- Page routing ------------------------------------------------------------
@@ -527,13 +620,19 @@ def render_chat() -> None:
     )
     for msg in messages:
         with st.chat_message(msg["role"]):
-            if msg.get("trace"):
-                with st.expander("Agent reasoning"):
-                    for ev in msg["trace"]:
-                        md = _event_md(ev)
-                        if md:
-                            st.markdown(md, unsafe_allow_html=True)
-            st.markdown(msg["content"])
+            if msg.get("thinking"):
+                st.markdown(
+                    '<div class="thinking-indicator"><span class="dots"><span></span><span></span><span></span></span> Atlas is thinking…</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                if msg.get("trace"):
+                    with st.expander("Agent reasoning"):
+                        for ev in msg["trace"]:
+                            md = _event_md(ev)
+                            if md:
+                                st.markdown(md, unsafe_allow_html=True)
+                st.markdown(msg["content"])
     if len(messages) == 1:
         st.markdown(
             '<div class="chat-hint">Ask how a decision changed over time, or a resourcing '
@@ -542,7 +641,17 @@ def render_chat() -> None:
         )
     if prompt := st.chat_input("Ask about the company's decision history"):
         send(prompt)
-        st.rerun()
+
+    # Generate response if last user message has no assistant reply
+    last_user_idx = _find_last_user_idx()
+    if last_user_idx is not None:
+        has_real_reply = (
+            last_user_idx + 1 < len(messages) and
+            messages[last_user_idx + 1]["role"] == "assistant" and
+            not messages[last_user_idx + 1].get("thinking")
+        )
+        if not has_real_reply:
+            generate_and_append_response()
 
 
 def render_timeline() -> None:
